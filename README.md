@@ -1,6 +1,6 @@
-# Modular Discord Bot
+# Modular Discord Logger
 
-A production-ready, modular, and sharding-safe Discord bot built with `discord.py` 2.0+.
+A production-ready, modular, and sharding-safe Discord logger built with `discord.py` 2.0+.
 Key features include per-guild isolated logging, suspicion heuristics, database log rotation (SQLite), and optional Google Drive integration.
 
 ## Features

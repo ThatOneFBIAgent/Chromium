@@ -17,13 +17,15 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Create a non-root user
 RUN useradd -m botuser
+
+# Copy the rest of the application with correct ownership
+COPY --chown=botuser:botuser . .
+
+# Ensure the non-root user owns the directory
+RUN chown -R botuser:botuser /app
+
+# Switch to non-root user
 USER botuser
-
-# Copy the rest of the application
-COPY . .
-
-# Create directory for database if it doesn't exist (handled by code usually, but good for permissions)
-# We might need volume mounting instructions in README
 
 # Run the bot
 CMD ["python", "bot.py"]
