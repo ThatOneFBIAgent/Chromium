@@ -87,5 +87,57 @@ class LogManagement(commands.Cog):
             for m in MODULES if current.lower() in m.lower()
         ]
 
+    @log_group.command(name="channel", description="Move all logging to a new channel (Simple Setup only)")
+    @app_commands.guild_only()
+    @app_commands.checks.has_permissions(manage_guild=True)
+    async def change_log_channel(self, interaction: discord.Interaction, channel: discord.TextChannel):
+        log_id, msg_id, mem_id, susp_id, enabled_modules = await get_guild_settings(interaction.guild_id)
+        
+        # Check if configured
+        if not log_id:
+             await interaction.response.send_message(
+                embed=EmbedBuilder.error("Not Configured", "This server does not have Chromium configured! Run `/setup` first."),
+                ephemeral=True
+            )
+             return
+
+        # Check if Simple or Complex
+        # In simple setup, log_id, msg_id, and mem_id are usually the same (or at least log_id is the main driver).
+        # We'll check if they are all identical OR if only log_id is set.
+        # If they are different, it implies a complex setup (or manual tinkering).
+        
+        # Helper to get unique non-None IDs
+        ids = {x for x in [log_id, msg_id, mem_id] if x is not None}
+        
+        is_simple = len(ids) == 1
+        
+        if not is_simple:
+            await interaction.response.send_message(
+                embed=EmbedBuilder.error(
+                    "Complex Setup Detected", 
+                    "This server uses a custom/complex channel configuration.\n"
+                    "You cannot use `/channel` to move everything at once.\n"
+                    "Please rename or move the individual channels manually in your server settings."
+                ),
+                ephemeral=True
+            )
+            return
+            
+        # Update All to New Channel
+        await upsert_guild_settings(
+            interaction.guild_id,
+            log_channel_id=channel.id,
+            message_log_id=channel.id,
+            member_log_id=channel.id,
+            susp_channel_id=channel.id # Also move suspicious logs for simple setup
+        )
+        
+        await interaction.response.send_message(
+            embed=EmbedBuilder.success(
+                "Channel Updated",
+                f"All logging has been moved to {channel.mention}."
+            )
+        )
+
 async def setup(bot: commands.Bot):
     await bot.add_cog(LogManagement(bot))

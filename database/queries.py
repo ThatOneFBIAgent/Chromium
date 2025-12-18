@@ -123,3 +123,23 @@ async def get_recent_logs(guild_id: int, limit: int = 50):
     except Exception as e:
         log_error(f"Failed to fetch logs for guild {guild_id}", exc_info=e)
         return []
+
+async def delete_guild_settings(guild_id: int):
+    """
+    Removes all settings and logs for a specific guild.
+    Used when the bot is kicked or banned.
+    """
+    if not db.connection:
+        return
+
+    try:
+        # Delete settings
+        await db.connection.execute("DELETE FROM guild_settings WHERE guild_id = ?", (guild_id,))
+        
+        # Delete logs
+        await db.connection.execute("DELETE FROM logs WHERE guild_id = ?", (guild_id,))
+        
+        await db.connection.commit()
+        log_database(f"Deleted settings and logs for guild {guild_id}")
+    except Exception as e:
+        log_error(f"Failed to delete guild settings for {guild_id}", exc_info=e)

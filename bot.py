@@ -8,7 +8,7 @@ from config import shared_config
 from database.core import db
 from utils.logger import logger, log_network, log_discord, log_error
 
-class ModularBot(commands.AutoShardedBot):
+class Chromium(commands.AutoShardedBot):
     def __init__(self):
         intents = discord.Intents.default()
         intents.members = True
@@ -19,7 +19,7 @@ class ModularBot(commands.AutoShardedBot):
         intents.bans = True # Required for bans
         
         super().__init__(
-            command_prefix="!", # Fallback, we mainly use slash commands
+            command_prefix="cr!", # Fallback, we mainly use slash commands
             intents=intents,
             help_command=None,
             shard_count=shared_config.SHARD_COUNT if shared_config.SHARD_COUNT > 1 else None
@@ -30,18 +30,14 @@ class ModularBot(commands.AutoShardedBot):
         Async setup hook to initialize DB and load extensions.
         """
         # Initialize Database
-        await asyncio.sleep(5) # Give network some time to settle (User Request)
-        # Attempt to restore from Drive if available (System Restoration)
+        await asyncio.sleep(5) # Give network some time to settle
+        # Attempt to restore from Drive if available
         await db.restore_from_drive()
         await db.connect()
         
-        # Load Logging Modules
+        # Load Logging Modules, Commands, and Services
         await self._load_extensions_from("logging_modules")
-        
-        # Load Command Modules
         await self._load_extensions_from("commands")
-        
-        # Load Services
         await self._load_extensions_from("services")
         
         # Sync generic commands (global)
@@ -56,6 +52,7 @@ class ModularBot(commands.AutoShardedBot):
             os.makedirs(folder)
             return
 
+        failed_extensions = []
         for filename in os.listdir(folder):
             if filename.endswith(".py") and not filename.startswith("__") and filename != "base.py":
                 extension_name = f"{folder}.{filename[:-3]}"
@@ -63,7 +60,11 @@ class ModularBot(commands.AutoShardedBot):
                     await self.load_extension(extension_name)
                     logger.info(f"Loaded extension: {extension_name}")
                 except Exception as e:
+                    failed_extensions.append(extension_name)
                     log_error(f"Failed to load extension {extension_name}", exc_info=e)
+
+        if failed_extensions:
+            log_error(f"Failed to load extensions: {failed_extensions}")
 
     async def on_ready(self):
         log_network(f"Logged in as {self.user} (ID: {self.user.id})")
@@ -81,7 +82,7 @@ class ModularBot(commands.AutoShardedBot):
         await super().close()
 
 # Bot Instance
-bot = ModularBot()
+bot = Chromium()
 
 if __name__ == "__main__":
     try:

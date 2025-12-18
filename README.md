@@ -65,6 +65,13 @@ Key features include per-guild isolated logging, suspicion heuristics, database 
    ```
    *Note: You might want to mount the database path if you change `DB_PATH` in `database/core.py` to a persistent volume location.*
 
+### Railway
+1.R **Deploy from github**
+   Make sure it's uploaded a public or private repo, and that railway has access to it.
+   Deploying should be as easy as adding the ENV variables and making sure `RAILPACK` is set.
+
+   If any problems occur, check the logs and open an issue on github. I'll try my best to help you.
+
 ## Permissions
 
 The bot requires the following permissions to function fully:
@@ -91,8 +98,13 @@ To enable export uploads:
 The bot automatically uses `AutoShardedBot`. You can force a specific shard count using the `SHARD_COUNT` env var, but leaving it to default is recommended for most use cases.
 
 ### TODO:
-- [ ] Add support for multiple Google Drive accounts (for different folders), and or S3/other cloud storage.
-- [ ] Add support for multiple databases (for different guilds).
-- [ ] Refine some of the logging modules and bot output to be more user-friendly.
-- [ ] Add support for confirmations
+- N/a
 
+## License
+
+This project is licensed under the GNUv3 License - see the [LICENSE](LICENSE) file for details.
+
+## Contact/Support
+
+If you have any questions or need support, feel free to open an issue on github. I'll try my best to help you.
+Or you can contact me thru discord at `_izacarlos`

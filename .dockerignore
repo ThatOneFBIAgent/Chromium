@@ -13,3 +13,7 @@ venv/
 bot_database.sqlite
 bot_database.sqlite-journal
 *.log
+*.md
+LICENSE
+
+# basically gitignore but for docker so the image is smaller
