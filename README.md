@@ -98,7 +98,10 @@ To enable export uploads:
 The bot automatically uses `AutoShardedBot`. You can force a specific shard count using the `SHARD_COUNT` env var, but leaving it to default is recommended for most use cases.
 
 ### TODO:
-- N/a
+- [ ] Make/copy a token helper for the google drive stuff
+- [X] Add signal handlers for when Railways shuts the bot down
+- this is mainly for housekeeping and immediately backing up the database
+- [ ] Make the code a bit more readable
 
 ## License
 

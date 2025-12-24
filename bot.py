@@ -4,9 +4,12 @@ import os
 import sys
 import signal
 import asyncio
+import time
+import contextlib
 from config import shared_config
 from database.core import db
-from utils.logger import logger, log_network, log_discord, log_error
+from utils.logger import logger, log_network, log_discord, log_error, log_database
+from utils.drive import drive_manager
 
 class Chromium(commands.AutoShardedBot):
     def __init__(self):
@@ -24,6 +27,9 @@ class Chromium(commands.AutoShardedBot):
             help_command=None,
             shard_count=shared_config.SHARD_COUNT if shared_config.SHARD_COUNT > 1 else None
         )
+        self.start_time = time.time()
+        self._is_shutting_down = False
+        self._ready_once = asyncio.Event()
 
     async def setup_hook(self):
         """
@@ -69,35 +75,148 @@ class Chromium(commands.AutoShardedBot):
             log_discord("All extensions loaded successfully.")
 
     async def on_ready(self):
-        log_network(f"Logged in as {self.user} (ID: {self.user.id})")
-        log_network(f"Shards: {self.shard_count}")
-        if shared_config.IS_RAILWAY:
-            log_network("Creating connection... Detected Railway Environment.")
+        # Only run once, even though each shard calls on_ready
+        if not self._ready_once.is_set():
+            total_shards = self.shard_count or 1
+            log_network(f"Bot is online as {self.user} (ID: {self.user.id})")
+            log_network(f"Connected to {len(self.guilds)} guilds across {total_shards} shard(s).")
+            if shared_config.IS_RAILWAY:
+                log_network("Environment: Railway Detected.")
             
-        await self.change_presence(activity=discord.Activity(
-            type=discord.ActivityType.watching, 
-            name=f"over {len(self.guilds)} guilds | Shard {self.shard_id or 0}"
-        ))
-        
+            await self.change_presence(activity=discord.Activity(
+                type=discord.ActivityType.watching, 
+                name=f"over {len(self.guilds)} guilds | Shard {self.shard_id or 0}"
+            ))
+            
+            self._ready_once.set()
+        else:
+            # Shard resumed event — bot reconnected
+            log_network(f"[Shard {self.shard_id or '?'}] resumed session in {time.time() - self.start_time:.2f} seconds.")
+
+    async def on_shard_connect(self, shard_id):
+        log_network(f"[Shard {shard_id}] connected successfully in {time.time() - self.start_time:.2f} seconds.")
+
+    async def on_shard_ready(self, shard_id):
+        guilds = [g for g in self.guilds if g.shard_id == shard_id]
+        log_network(f"[Shard {shard_id}] ready - handling {len(guilds)} guild(s).")
+
+    async def on_shard_disconnect(self, shard_id):
+        log_network(f"[Shard {shard_id}] disconnected - waiting for resume.")
+
+    async def on_shard_resumed(self, shard_id):
+        log_network(f"[Shard {shard_id}] resumed connection.")
+
     async def close(self):
-        await db.close()
+        # Note: Logic moved to graceful_shutdown primarily, this is just a super call wrapper now
         await super().close()
 
 # Bot Instance
 bot = Chromium()
 
+async def kill_all_tasks():
+    current = asyncio.current_task()
+    for task in asyncio.all_tasks():
+        if task is current: continue
+        task.cancel()
+    await asyncio.sleep(1)
+
+async def graceful_shutdown():
+    logger.info("Shutdown signal received - performing cleanup...")
+    bot._is_shutting_down = True
+
+    # Let ongoing tasks wrap up (simple sleep)
+    await asyncio.sleep(1)
+    try:
+        if os.path.exists(db.db_path):
+             logger.info("Uploading database backup...")
+             
+             # Read file content
+             with open(db.db_path, 'rb') as f:
+                db_content = f.read()
+
+             backup_name = "chromium_database_backup.sqlite"
+             existing_id = drive_manager.find_file(backup_name)
+             
+             if existing_id:
+                 drive_manager.update_file(existing_id, db_content)
+             else:
+                 drive_manager.upload_file(backup_name, db_content)
+                 
+             logger.info("Database backup completed.")
+    except Exception as e:
+        log_error("Failed to perform final database backup", exc_info=e)
+
+    # Close DB
+    await db.close()
+
+    # Close bot
+    await kill_all_tasks()
+    with contextlib.suppress(Exception):
+        await bot.close()
+
+    logger.info("Shutdown complete. Chromium signing off.")
+    sys.exit(0)
+
+async def main():
+    async with bot:
+        # Register signal handlers
+        shutdown_signal = asyncio.get_event_loop().create_future()
+
+        def _signal_handler():
+            if not shutdown_signal.done():
+                shutdown_signal.set_result(True)
+
+        loop = asyncio.get_event_loop()
+        # Windows compatibility for signal handling
+        if sys.platform != 'win32':
+            for sig in (signal.SIGINT, signal.SIGTERM):
+                try:
+                    loop.add_signal_handler(sig, _signal_handler)
+                except Exception as e:
+                    log_error(f"Failed to register signal handler for {sig!r}: {e}")
+        else:
+            # Windows doesn't support add_signal_handler for everything, 
+            # but asyncio.run/main loop usually handles Ctrl+C as KeyboardInterrupt.
+            # We will rely on KeyboardInterrupt catch below for Windows local dev.
+            pass
+
+        bot_task = asyncio.create_task(bot.start(shared_config.DISCORD_TOKEN))
+
+        try:
+            # Wait for shutdown signal (manual set or future) or KeyboardInterrupt
+            if sys.platform != 'win32':
+                await shutdown_signal
+            else:
+                # On Windows, we just wait on the bot task until it's cancelled or finishes
+                # But actually, we want to catch Ctrl+C.
+                await bot_task
+        except asyncio.CancelledError:
+            logger.info("Main task cancelled; initiating cleanup.")
+        except KeyboardInterrupt:
+            logger.info("KeyboardInterrupt received; initiating cleanup.")
+        finally:
+            if not bot_task.done():
+                bot_task.cancel()
+                try:
+                    await bot_task
+                except asyncio.CancelledError:
+                    pass
+            
+            try:
+                await graceful_shutdown()
+            except Exception as e:
+                log_error(f"Error during graceful shutdown: {e}", exc_info=e)
+                sys.exit(1)
+
 if __name__ == "__main__":
     try:
         if not shared_config.DISCORD_TOKEN:
-            log_error("No DISCORD_TOKEN found in environment config.")
-        else:
-            bot.run(shared_config.DISCORD_TOKEN, log_handler=None) 
+             log_error("No DISCORD_TOKEN found in environment config.")
+             sys.exit(1)
+             
+        asyncio.run(main())
     except KeyboardInterrupt:
-        logger.info("KeyboardInterrupt received. Shutting down.")
-        # bot.run already handles cleanup, but we can ensure DB close here if needed
-        bot.close()
         pass
     except Exception as e:
-        log_error("Fatal error starting bot", exc_info=e)
-    finally:
-        pass
+        log_error("Fatal crash in main", exc_info=e)
+        sys.exit(1)
