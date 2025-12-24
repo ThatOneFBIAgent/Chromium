@@ -1,8 +1,10 @@
 import discord
 from discord.ext import commands
 from database.queries import delete_guild_settings, check_soft_deleted_settings, restore_guild_settings, hard_delete_guild_settings
-from utils.logger import log_discord, log_error
+from utils.logger import get_logger
 from utils.embed_builder import EmbedBuilder
+
+log = get_logger()
 
 class RestorationView(discord.ui.View):
     def __init__(self, guild_id: int):
@@ -56,11 +58,11 @@ class GuildEvents(commands.Cog):
         Triggered when the bot is kicked, banned, or leaves a guild.
         Soft-deletes configuration data (kept for 60 days).
         """
-        log_discord(f"Bot removed from guild: {guild.name} ({guild.id}). Soft-deleting settings.")
+        log.discord(f"Bot removed from guild: {guild.name} ({guild.id}). Soft-deleting settings.")
         try:
             await delete_guild_settings(guild.id)
         except Exception as e:
-            log_error(f"Failed to soft-delete guild settings: {e}")
+            log.error(f"Failed to soft-delete guild settings: {e}")
 
     @commands.Cog.listener()
     async def on_guild_join(self, guild: discord.Guild):
@@ -68,7 +70,7 @@ class GuildEvents(commands.Cog):
         Triggered when the bot joins a guild.
         Checks for soft-deleted settings and prompts for restoration.
         """
-        log_discord(f"Joined guild: {guild.name} ({guild.id}). Checking for previous settings.")
+        log.discord(f"Joined guild: {guild.name} ({guild.id}). Checking for previous settings.")
         
         is_returning = await check_soft_deleted_settings(guild.id)
         if not is_returning:
@@ -86,7 +88,7 @@ class GuildEvents(commands.Cog):
                     break
         
         if not target_channel:
-             log_discord(f"Could not find channel to send restoration prompt in {guild.name}")
+             log.discord(f"Could not find channel to send restoration prompt in {guild.name}")
              return
 
         view = RestorationView(guild.id)

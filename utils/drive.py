@@ -8,7 +8,9 @@ from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload, MediaIoBaseDownload
 from config import shared_config
-from utils.logger import log_error, log_network
+from utils.logger import get_logger
+
+log = get_logger()
 
 class DriveManager:
     def __init__(self):
@@ -40,14 +42,14 @@ class DriveManager:
                 if creds.expired and creds.refresh_token:
                     try:
                         creds.refresh(Request())
-                        log_network("Refreshed Drive OAuth token.")
+                        log.network("Refreshed Drive OAuth token.")
                     except Exception as e:
-                        log_error(f"Failed to refresh Drive token", exc_info=e)
+                        log.error(f"Failed to refresh Drive token", exc_info=e)
                         
                 self.service = build('drive', 'v3', credentials=creds)
-                log_network("Google Drive service initialized.")
+                log.network("Google Drive service initialized.")
             except Exception as e:
-                log_error("Failed to initialize Google Drive service", exc_info=e)
+                log.error("Failed to initialize Google Drive service", exc_info=e)
 
     def upload_file(self, filename: str, content: int | str | bytes, mimetype: str = 'text/plain') -> Optional[str]:
         """
@@ -77,11 +79,11 @@ class DriveManager:
                 fields='id, webViewLink'
             ).execute()
             
-            log_network(f"Uploaded file {filename} to Drive. ID: {file.get('id')}")
+            log.network(f"Uploaded file {filename} to Drive. ID: {file.get('id')}")
             return file.get('webViewLink')
             
         except Exception as e:
-            log_error(f"Failed to upload to Drive", exc_info=e)
+            log.error(f"Failed to upload to Drive", exc_info=e)
             return None
 
     def find_file(self, filename: str) -> Optional[str]:
@@ -100,7 +102,7 @@ class DriveManager:
             return items[0]['id']
             
         except Exception as e:
-            log_error(f"Failed to search file on Drive", exc_info=e)
+            log.error(f"Failed to search file on Drive", exc_info=e)
             return None
 
     def update_file(self, file_id: str, content: int | str | bytes, mimetype: str = 'text/plain') -> Optional[str]:
@@ -123,11 +125,11 @@ class DriveManager:
                 fields='id, webViewLink'
             ).execute()
             
-            log_network(f"Updated file ID {file_id} on Drive.")
+            log.network(f"Updated file ID {file_id} on Drive.")
             return file.get('webViewLink')
             
         except Exception as e:
-            log_error(f"Failed to update file on Drive", exc_info=e)
+            log.error(f"Failed to update file on Drive", exc_info=e)
             return None
 
     def download_file(self, file_id: str) -> Optional[bytes]:
@@ -147,7 +149,7 @@ class DriveManager:
             return fh.getvalue()
             
         except Exception as e:
-            log_error(f"Failed to download file from Drive", exc_info=e)
+            log.error(f"Failed to download file from Drive", exc_info=e)
             return None
 
     def debug_list_files(self, limit: int = 10):
@@ -160,12 +162,12 @@ class DriveManager:
             results = self.service.files().list(q=query, spaces='drive', fields='files(id, name)', pageSize=limit).execute()
             items = results.get('files', [])
             
-            log_network(f"DEBUG: Found {len(items)} files in folder {self.folder_id}:")
+            log.network(f"DEBUG: Found {len(items)} files in folder {self.folder_id}:")
             for item in items:
-                log_network(f" - {item['name']} ({item['id']})")
+                log.network(f" - {item['name']} ({item['id']})")
                 
         except Exception as e:
-            log_error(f"Failed to debug list files", exc_info=e)
+            log.error(f"Failed to debug list files", exc_info=e)
 
 # Global instance
 drive_manager = DriveManager()

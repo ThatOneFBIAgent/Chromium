@@ -3,7 +3,9 @@ from discord import app_commands
 from discord.ext import commands
 from .base import BaseLogger
 from utils.embed_builder import EmbedBuilder
-from utils.logger import log_error
+from utils.logger import get_logger
+
+log = get_logger()
 
 class ErrorLogger(BaseLogger):
     def __init__(self, bot):
@@ -41,7 +43,7 @@ class ErrorLogger(BaseLogger):
             )
             return
 
-        log_error(f"App Command Error in {interaction.command.name if interaction.command else 'Unknown'}", exc_info=error)
+        log.error(f"App Command Error in {interaction.command.name if interaction.command else 'Unknown'}", exc_info=error)
         
         if interaction.guild:
             # Try to log to guild channel

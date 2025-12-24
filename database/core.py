@@ -1,6 +1,9 @@
 import aiosqlite
 import os
-from utils.logger import log_database, log_error
+from utils.logger import get_logger
+
+# Initialize logger
+log = get_logger()
 
 DB_PATH = "chromium_database.sqlite"
 
@@ -14,10 +17,10 @@ class DatabaseManager:
             self.connection = await aiosqlite.connect(self.db_path)
             # Enable foreign keys
             await self.connection.execute("PRAGMA foreign_keys = ON")
-            log_database(f"Connected to SQLite database at {self.db_path}")
+            log.database(f"Connected to SQLite database at {self.db_path}")
             await self.init_schema()
         except Exception as e:
-            log_error("Failed to connect to database", exc_info=e)
+            log.error("Failed to connect to database", exc_info=e)
             raise
 
     async def restore_from_drive(self):
@@ -32,22 +35,22 @@ class DatabaseManager:
             # Try to init if missing
             drive_manager.initialize_service()
             if not drive_manager.service:
-                log_database(f"Drive service not ready, retrying in 2s... ({i+1}/3)")
+                log.database(f"Drive service not ready, retrying in 2s... ({i+1}/3)")
                 await asyncio.sleep(2)
         
         if not drive_manager.service:
-            log_database("Drive restore skipped (No service after retries).")
+            log.database("Drive restore skipped (No service after retries).")
             return
             
         filename = "chromium_database_backup.sqlite"
         try:
             file_id = drive_manager.find_file(filename)
             if not file_id:
-                log_database(f"No remote backup found to restore: '{filename}'")
+                log.database(f"No remote backup found to restore: '{filename}'")
                 drive_manager.debug_list_files()
                 return
                 
-            log_database(f"Found remote backup ({file_id}). Downloading...")
+            log.database(f"Found remote backup ({file_id}). Downloading...")
             content = drive_manager.download_file(file_id)
             
             if content:
@@ -55,12 +58,12 @@ class DatabaseManager:
                 # Just overwrite the file
                 with open(self.db_path, 'wb') as f:
                     f.write(content)
-                log_database("Database restored from Drive backup successfully.")
+                log.database("Database restored from Drive backup successfully.")
             else:
-                log_error("Failed to download backup content.")
+                log.error("Failed to download backup content.")
                 
         except Exception as e:
-            log_error("Failed to restore database from Drive context", exc_info=e)
+            log.error("Failed to restore database from Drive context", exc_info=e)
 
     async def init_schema(self):
         if not self.connection:
@@ -97,15 +100,15 @@ class DatabaseManager:
             for q in queries:
                 await self.connection.execute(q)
             await self.connection.commit()
-            log_database("Database schema initialization complete.")
+            log.database("Database schema initialization complete.")
         except Exception as e:
-            log_error("Failed to initialize database schema", exc_info=e)
+            log.error("Failed to initialize database schema", exc_info=e)
             raise
 
     async def close(self):
         if self.connection:
             await self.connection.close()
-            log_database("Database connection closed.")
+            log.database("Database connection closed.")
 
 # Global DB instance
 db = DatabaseManager()

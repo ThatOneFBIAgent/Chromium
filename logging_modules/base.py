@@ -4,8 +4,10 @@ from typing import Optional
 from discord.ext import commands
 from database.queries import get_guild_settings, add_log
 from utils.embed_builder import EmbedBuilder
-from utils.logger import log_error
+from utils.logger import get_logger
 from utils.suspicious import suspicious_detector
+
+log = get_logger()
 
 class BaseLogger(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -88,4 +90,4 @@ class BaseLogger(commands.Cog):
             await add_log(guild.id, self.module_name, content)
             
         except Exception as e:
-            log_error(f"Error logging event in {self.module_name}", exc_info=e)
+            log.error(f"Error logging event in {self.module_name}", exc_info=e)

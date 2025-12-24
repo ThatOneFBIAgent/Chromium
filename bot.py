@@ -8,8 +8,10 @@ import time
 import contextlib
 from config import shared_config
 from database.core import db
-from utils.logger import logger, log_network, log_discord, log_error, log_database
+from utils.logger import get_logger
 from utils.drive import drive_manager
+
+log = get_logger()
 
 class Chromium(commands.AutoShardedBot):
     def __init__(self):
@@ -49,9 +51,9 @@ class Chromium(commands.AutoShardedBot):
         # Sync generic commands (global)
         try:
             synced = await self.tree.sync()
-            log_discord(f"Synced {len(synced)} command(s) globally.")
+            log.discord(f"Synced {len(synced)} command(s) globally.")
         except Exception as e:
-            log_error("Failed to sync commands", exc_info=e)
+            log.error("Failed to sync commands", exc_info=e)
 
     async def _load_extensions_from(self, folder: str):
         if not os.path.exists(folder):
@@ -64,24 +66,24 @@ class Chromium(commands.AutoShardedBot):
                 extension_name = f"{folder}.{filename[:-3]}"
                 try:
                     await self.load_extension(extension_name)
-                    logger.info(f"Loaded extension: {extension_name}")
+                    log.info(f"Loaded extension: {extension_name}")
                 except Exception as e:
                     failed_extensions.append(extension_name)
-                    log_error(f"Failed to load extension {extension_name}", exc_info=e)
+                    log.error(f"Failed to load extension {extension_name}", exc_info=e)
 
         if failed_extensions:
-            log_error(f"Failed to load extensions: {failed_extensions}")
+            log.error(f"Failed to load extensions: {failed_extensions}")
         else:
-            log_discord("All extensions loaded successfully.")
+            log.discord("All extensions loaded successfully.")
 
     async def on_ready(self):
         # Only run once, even though each shard calls on_ready
         if not self._ready_once.is_set():
             total_shards = self.shard_count or 1
-            log_network(f"Bot is online as {self.user} (ID: {self.user.id})")
-            log_network(f"Connected to {len(self.guilds)} guilds across {total_shards} shard(s).")
+            log.network(f"Bot is online as {self.user} (ID: {self.user.id})")
+            log.network(f"Connected to {len(self.guilds)} guilds across {total_shards} shard(s).")
             if shared_config.IS_RAILWAY:
-                log_network("Environment: Railway Detected.")
+                log.network("Environment: Railway Detected.")
             
             await self.change_presence(activity=discord.Activity(
                 type=discord.ActivityType.watching, 
@@ -91,20 +93,20 @@ class Chromium(commands.AutoShardedBot):
             self._ready_once.set()
         else:
             # Shard resumed event — bot reconnected
-            log_network(f"[Shard {self.shard_id or '?'}] resumed session in {time.time() - self.start_time:.2f} seconds.")
+            log.network(f"[Shard {self.shard_id or '?'}] resumed session in {time.time() - self.start_time:.2f} seconds.")
 
     async def on_shard_connect(self, shard_id):
-        log_network(f"[Shard {shard_id}] connected successfully in {time.time() - self.start_time:.2f} seconds.")
+        log.network(f"[Shard {shard_id}] connected successfully in {time.time() - self.start_time:.2f} seconds.")
 
     async def on_shard_ready(self, shard_id):
         guilds = [g for g in self.guilds if g.shard_id == shard_id]
-        log_network(f"[Shard {shard_id}] ready - handling {len(guilds)} guild(s).")
+        log.network(f"[Shard {shard_id}] ready - handling {len(guilds)} guild(s).")
 
     async def on_shard_disconnect(self, shard_id):
-        log_network(f"[Shard {shard_id}] disconnected - waiting for resume.")
+        log.network(f"[Shard {shard_id}] disconnected - waiting for resume.")
 
     async def on_shard_resumed(self, shard_id):
-        log_network(f"[Shard {shard_id}] resumed connection.")
+        log.network(f"[Shard {shard_id}] resumed connection.")
 
     async def close(self):
         # Note: Logic moved to graceful_shutdown primarily, this is just a super call wrapper now
@@ -121,14 +123,15 @@ async def kill_all_tasks():
     await asyncio.sleep(1)
 
 async def graceful_shutdown():
-    logger.info("Shutdown signal received - performing cleanup...")
+    log.info("Shutdown signal received - performing cleanup...")
     bot._is_shutting_down = True
 
     # Let ongoing tasks wrap up (simple sleep)
     await asyncio.sleep(1)
+
     try:
         if os.path.exists(db.db_path):
-             logger.info("Uploading database backup...")
+             log.info("Uploading database backup...")
              
              # Read file content
              with open(db.db_path, 'rb') as f:
@@ -142,9 +145,9 @@ async def graceful_shutdown():
              else:
                  drive_manager.upload_file(backup_name, db_content)
                  
-             logger.info("Database backup completed.")
+             log.info("Database backup completed.")
     except Exception as e:
-        log_error("Failed to perform final database backup", exc_info=e)
+        log.error("Failed to perform final database backup", exc_info=e)
 
     # Close DB
     await db.close()
@@ -154,7 +157,7 @@ async def graceful_shutdown():
     with contextlib.suppress(Exception):
         await bot.close()
 
-    logger.info("Shutdown complete. Chromium signing off.")
+    log.info("Shutdown complete. Chromium signing off.")
     sys.exit(0)
 
 async def main():
@@ -173,7 +176,7 @@ async def main():
                 try:
                     loop.add_signal_handler(sig, _signal_handler)
                 except Exception as e:
-                    log_error(f"Failed to register signal handler for {sig!r}: {e}")
+                    log.error(f"Failed to register signal handler for {sig!r}: {e}")
         else:
             # Windows doesn't support add_signal_handler for everything, 
             # but asyncio.run/main loop usually handles Ctrl+C as KeyboardInterrupt.
@@ -191,9 +194,9 @@ async def main():
                 # But actually, we want to catch Ctrl+C.
                 await bot_task
         except asyncio.CancelledError:
-            logger.info("Main task cancelled; initiating cleanup.")
+            log.info("Main task cancelled; initiating cleanup.")
         except KeyboardInterrupt:
-            logger.info("KeyboardInterrupt received; initiating cleanup.")
+            log.info("KeyboardInterrupt received; initiating cleanup.")
         finally:
             if not bot_task.done():
                 bot_task.cancel()
@@ -205,18 +208,20 @@ async def main():
             try:
                 await graceful_shutdown()
             except Exception as e:
-                log_error(f"Error during graceful shutdown: {e}", exc_info=e)
+                log.error(f"Error during graceful shutdown: {e}", exc_info=e)
                 sys.exit(1)
 
 if __name__ == "__main__":
     try:
         if not shared_config.DISCORD_TOKEN:
-             log_error("No DISCORD_TOKEN found in environment config.")
+             log.error("No DISCORD_TOKEN found in environment config.")
              sys.exit(1)
              
         asyncio.run(main())
     except KeyboardInterrupt:
         pass
     except Exception as e:
-        log_error("Fatal crash in main", exc_info=e)
+        # We need a fallback logger here if log isn't defined, but it is global
+        # im not gonna be nesting try clauses nuh uh
+        log.error("Fatal crash in main", exc_info=e)
         sys.exit(1)

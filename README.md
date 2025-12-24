@@ -102,6 +102,7 @@ The bot automatically uses `AutoShardedBot`. You can force a specific shard coun
 - [X] Add signal handlers for when Railways shuts the bot down
 - this is mainly for housekeeping and immediately backing up the database
 - [ ] Make the code a bit more readable
+- [X] Make the logger more dynamic and actually colored
 
 ## License
 

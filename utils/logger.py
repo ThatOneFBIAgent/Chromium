@@ -1,71 +1,166 @@
 import logging
 import sys
+import os
+import inspect
 from datetime import datetime
-from colorama import init, Fore, Style
 from config import shared_config
 
-# Initialize colorama
-init(autoreset=True)
+# custom log levels
+SUCCESS_LEVEL = 25
+EVENT_LEVEL = 15
+TRACE_LEVEL = 12
+DATABASE_LEVEL = 19
+NETWORK_LEVEL = 18
+DISCORD_LEVEL = 17 
 
-class CustomFormatter(logging.Formatter):
-    """
-    Custom formatter with color coding for different levels/tags.
-    tags: ERROR, NETWORK, DISCORD, DATABASE
-    """
-    
+logging.SUCCESS_LEVEL = SUCCESS_LEVEL
+logging.EVENT_LEVEL = EVENT_LEVEL
+logging.DATABASE_LEVEL = DATABASE_LEVEL
+logging.NETWORK_LEVEL = NETWORK_LEVEL
+logging.DISCORD_LEVEL = DISCORD_LEVEL
+logging.TRACE_LEVEL = TRACE_LEVEL
+
+logging.addLevelName(SUCCESS_LEVEL, "SUCCESS")
+logging.addLevelName(EVENT_LEVEL, "EVENT")
+logging.addLevelName(DATABASE_LEVEL, "DATABASE")
+logging.addLevelName(NETWORK_LEVEL, "NETWORK")
+logging.addLevelName(DISCORD_LEVEL, "DISCORD")
+logging.addLevelName(TRACE_LEVEL, "TRACE")
+
+class ColoredFormatter(logging.Formatter):
     COLORS = {
-        'DEBUG': Fore.CYAN,
-        'INFO': Fore.GREEN,
-        'WARNING': Fore.YELLOW,
-        'ERROR': Fore.RED,
-        'CRITICAL': Fore.MAGENTA + Style.BRIGHT,
-        'NETWORK': Fore.BLUE,
-        'DISCORD': Fore.MAGENTA,
-        'DATABASE': Fore.CYAN
+        TRACE_LEVEL: "\033[90m",                    # gray
+        logging.DEBUG: "\033[90m",                  # gray
+        logging.INFO: "\033[36m",                   # cyan
+        DATABASE_LEVEL: "\033[35m",                 # purple
+        DISCORD_LEVEL: "\033[35m",                  # purple
+        EVENT_LEVEL: "\033[96m",                    # light blue
+        NETWORK_LEVEL: "\033[34m",                  # blue
+        SUCCESS_LEVEL: "\033[32m",                  # green text
+        logging.WARNING: "\033[33m",                # yellow
+        logging.ERROR: "\033[31m",                  # red
+        logging.CRITICAL: "\033[41;97m",            # red bg with white text
     }
+    RESET = "\033[0m"
 
     def format(self, record: logging.LogRecord) -> str:
-        # Determine color based on custom tags or level
-        tag = getattr(record, 'tag', record.levelname)
-        color = self.COLORS.get(tag, Fore.WHITE)
+        color = self.COLORS.get(record.levelno, "")
         
-        timestamp = datetime.fromtimestamp(record.created).strftime('%Y-%m-%d %H:%M:%S')
-        
-        # Structure: [TIMESTAMP] [TAG] Message
-        log_fmt = f"{Style.DIM}[{timestamp}]{Style.RESET_ALL} {color}[{tag}]{Style.RESET_ALL} %(message)s"
-        
-        if record.exc_info:
-            # If there's an exception, add it formatted
-            return logging.Formatter(log_fmt).format(record)
-        
-        formatter = logging.Formatter(log_fmt)
-        return formatter.format(record)
+        # Dynamic Time Formatting
+        if shared_config.IS_RAILWAY:
+            # Show relative time (uptime) in ms
+            time_str = f"{record.relativeCreated:.0f}ms"
+        else:
+            # Show full timestamp for local debugging
+            time_str = datetime.fromtimestamp(record.created).strftime('%Y-%m-%d %H:%M:%S')
 
-def setup_logger(name: str = "Bot") -> logging.Logger:
+        # Auto-context: simplify module path
+        # If the logger name is set (via get_logger), usually we trust it?
+        # But if we want to enforce the file-path logic regardless:
+        module_path = record.pathname.replace(os.getcwd(), "").lstrip(os.sep)
+        module_parts = module_path.split(os.sep)
+        
+        if len(module_parts) > 1:
+            module_parts[-1] = os.path.splitext(module_parts[-1])[0]
+        
+        module_name = ".".join(p for p in module_parts if p and p != "__init__")
+        
+        # In Flurazide, get_logger sets the logger name. 
+        # The formatter here uses the pathname to derive context dynamically. 
+        # Ideally, we primarily use the logger name if it's meaningful, but the path fallback is robust.
+        # Let's stick to the path fallback for consistency with the requested style.
+        
+        formatted = f"[{time_str}] [{record.levelname:^8}] [{module_name}] {record.getMessage()}"
+
+        if record.exc_info:
+            if not record.exc_text:
+                record.exc_text = self.formatException(record.exc_info)
+            if record.exc_text:
+                formatted += "\n" + record.exc_text
+
+        return f"{color}{formatted}{self.RESET}"
+
+# Configure root/base settings (so get_logger childs inherit or reuse)
+# We won't set a root logger here to avoid conflicts, just a factory function.
+
+def get_logger(name=None) -> logging.Logger:
+    """
+    Smart logger factory.
+    Auto-detects the caller's module/filename if name is not provided.
+    """
+    if not name:
+        # Inspect call stack
+        try:
+            frame = inspect.stack()[1]
+            module = inspect.getmodule(frame[0])
+            if module and hasattr(module, '__name__') and module.__name__ not in ("__main__",):
+                name = module.__name__
+            else:
+                 # fallback to file-based path
+                path = frame.filename.replace(os.getcwd(), "").lstrip(os.sep)
+                parts = path.split(os.sep)
+                parts[-1] = os.path.splitext(parts[-1])[0]
+                name = ".".join(parts)
+        except Exception:
+            name = "Chromium"
+
     logger = logging.getLogger(name)
-    logger.setLevel(logging.INFO)
+    logger.setLevel(logging.TRACE_LEVEL if shared_config.ENVIRONMENT == "development" else logging.INFO)
     
-    # Console handler
-    handler = logging.StreamHandler(sys.stdout)
-    handler.setFormatter(CustomFormatter())
-    
+    # Check if handler exists to avoid duplicates
     if not logger.handlers:
+        handler = logging.StreamHandler(sys.stdout)
+        handler.setFormatter(ColoredFormatter())
         logger.addHandler(handler)
         
     return logger
 
-# Global logger instance
-logger = setup_logger("Core")
+# Add convenience methods to Logger class
+def success(self, message, *args, **kwargs):
+    if self.isEnabledFor(SUCCESS_LEVEL):
+        kwargs.setdefault('stacklevel', 2)
+        self._log(SUCCESS_LEVEL, message, args, **kwargs)
 
-# Helper functions for specific tags
+def event(self, message, *args, **kwargs):
+    if self.isEnabledFor(EVENT_LEVEL):
+        kwargs.setdefault('stacklevel', 2)
+        self._log(EVENT_LEVEL, message, args, **kwargs)
+
+def database(self, message, *args, **kwargs):
+    if self.isEnabledFor(DATABASE_LEVEL):
+        kwargs.setdefault('stacklevel', 2)
+        self._log(DATABASE_LEVEL, message, args, **kwargs)
+
+def network(self, message, *args, **kwargs):
+    if self.isEnabledFor(NETWORK_LEVEL):
+        kwargs.setdefault('stacklevel', 2)
+        self._log(NETWORK_LEVEL, message, args, **kwargs)
+
+def discord_log(self, message, *args, **kwargs):
+    if self.isEnabledFor(DISCORD_LEVEL):
+        kwargs.setdefault('stacklevel', 2)
+        self._log(DISCORD_LEVEL, message, args, **kwargs)
+
+# Wire up methods
+logging.Logger.success = success
+logging.Logger.event = event
+logging.Logger.database = database
+logging.Logger.network = network
+logging.Logger.discord = discord_log
+
+# Legacy/Global instance for backward compat (files that import `logger`)
+# We use a default one. 
+logger = get_logger("Global")
+
+# Helper functions that match previous API (proxies to the global logger)
 def log_network(msg: str):
-    logger.info(msg, extra={'tag': 'NETWORK'})
+    logger.network(msg, stacklevel=2)
 
 def log_discord(msg: str):
-    logger.info(msg, extra={'tag': 'DISCORD'})
+    logger.discord(msg, stacklevel=2)
 
 def log_database(msg: str):
-    logger.info(msg, extra={'tag': 'DATABASE'})
+    logger.database(msg, stacklevel=2)
 
 def log_error(msg: str, exc_info=None):
-    logger.error(msg, exc_info=exc_info, extra={'tag': 'ERROR'})
+    logger.error(msg, exc_info=exc_info, stacklevel=2)

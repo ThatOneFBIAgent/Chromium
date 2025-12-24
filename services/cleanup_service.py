@@ -1,7 +1,9 @@
 import asyncio
 from discord.ext import commands, tasks
 from database.core import db
-from utils.logger import log_database, log_error
+from utils.logger import get_logger
+
+log = get_logger()
 
 class CleanupService(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -43,10 +45,10 @@ class CleanupService(commands.Cog):
             await db.connection.commit()
             
             if cursor.rowcount > 0:
-                log_database(f"Cleanup Task: Permanently removed {cursor.rowcount} expired guild configurations.")
+                log.database(f"Cleanup Task: Permanently removed {cursor.rowcount} expired guild configurations.")
                 
         except Exception as e:
-            log_error("Failed to run cleanup task", exc_info=e)
+            log.error("Failed to run cleanup task", exc_info=e)
 
     @cleanup_task.before_loop
     async def before_cleanup(self):

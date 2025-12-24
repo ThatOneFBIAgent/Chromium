@@ -4,9 +4,11 @@ import asyncio
 import datetime
 from config import shared_config
 from utils.drive import drive_manager
-from utils.logger import log_network, log_error, logger
+from utils.logger import get_logger
 import shutil
 import os
+
+log = get_logger()
 
 DB_PATH = "chromium_database.sqlite"
 
@@ -16,9 +18,9 @@ class BackupService(commands.Cog):
         # Start the backup loop if Drive is configured
         if shared_config.DRIVE_CREDS_B64 and shared_config.DRIVE_FOLDER_ID:
             self.backup_loop.start()
-            logger.info("Automated Backup Service started.")
+            log.info("Automated Backup Service started.")
         else:
-            logger.warning("Google Drive credentials or Folder ID missing. Automated backups disabled.")
+            log.warning("Google Drive credentials or Folder ID missing. Automated backups disabled.")
 
     def cog_unload(self):
         self.backup_loop.cancel()
@@ -38,13 +40,13 @@ class BackupService(commands.Cog):
         await asyncio.sleep(7200)
 
     async def perform_backup(self):
-        logger.info("Starting automated database backup...")
+        log.info("Starting automated database backup...")
         try:
             # Fixed filename for rotation (overwrite strategy)
             backup_filename = "chromium_database_backup.sqlite"
             
             if not os.path.exists(DB_PATH):
-                log_error("Database file not found for backup.")
+                log.error("Database file not found for backup.")
                 return
 
             # Read file in binary mode
@@ -52,7 +54,7 @@ class BackupService(commands.Cog):
                 with open(DB_PATH, 'rb') as f:
                     content_bytes = f.read()
             except Exception as e:
-                log_error("Failed to read database file for backup", exc_info=e)
+                log.error("Failed to read database file for backup", exc_info=e)
                 return
             
             # Check if exists
@@ -66,12 +68,12 @@ class BackupService(commands.Cog):
                 action = "Uploaded"
             
             if link:
-                logger.info(f"Backup successful ({action}): {link}")
+                log.info(f"Backup successful ({action}): {link}")
             else:
-                log_error("Backup upload failed.")
+                log.error("Backup upload failed.")
 
         except Exception as e:
-            log_error("Automated backup failed", exc_info=e)
+            log.error("Automated backup failed", exc_info=e)
 
 
 
