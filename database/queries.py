@@ -78,11 +78,14 @@ async def get_guild_settings(guild_id: int):
         
     try:
         cursor = await db.connection.execute(
-            "SELECT log_channel_id, message_log_id, member_log_id, suspicious_channel_id, enabled_modules FROM guild_settings WHERE guild_id = ?", 
+            "SELECT log_channel_id, message_log_id, member_log_id, suspicious_channel_id, enabled_modules, deleted_at FROM guild_settings WHERE guild_id = ?", 
             (guild_id,)
         )
         row = await cursor.fetchone()
         if row:
+             # row[5] is deleted_at. If set, return defaults (effectively "not configured" for the logger)
+            if row[5]:
+                return None, None, None, None, {}
             return row[0], row[1], row[2], row[3], json.loads(row[4]) if row[4] else {}
         return None, None, None, None, {}
     except Exception as e:
@@ -126,20 +129,65 @@ async def get_recent_logs(guild_id: int, limit: int = 50):
 
 async def delete_guild_settings(guild_id: int):
     """
-    Removes all settings and logs for a specific guild.
-    Used when the bot is kicked or banned.
+    Soft-deletes settings for a guild (sets deleted_at).
     """
     if not db.connection:
         return
 
     try:
-        # Delete settings
-        await db.connection.execute("DELETE FROM guild_settings WHERE guild_id = ?", (guild_id,))
-        
-        # Delete logs
-        await db.connection.execute("DELETE FROM logs WHERE guild_id = ?", (guild_id,))
-        
+        await db.connection.execute(
+            "UPDATE guild_settings SET deleted_at = CURRENT_TIMESTAMP WHERE guild_id = ?", 
+            (guild_id,)
+        )
         await db.connection.commit()
-        log_database(f"Deleted settings and logs for guild {guild_id}")
+        log_database(f"Soft-deleted settings for guild {guild_id}")
     except Exception as e:
-        log_error(f"Failed to delete guild settings for {guild_id}", exc_info=e)
+        log_error(f"Failed to soft-delete settings for {guild_id}", exc_info=e)
+
+async def hard_delete_guild_settings(guild_id: int):
+    """
+    Permanently removes settings and logs.
+    """
+    if not db.connection:
+        return
+
+    try:
+        await db.connection.execute("DELETE FROM guild_settings WHERE guild_id = ?", (guild_id,))
+        await db.connection.execute("DELETE FROM logs WHERE guild_id = ?", (guild_id,))
+        await db.connection.commit()
+        log_database(f"Hard-deleted settings for guild {guild_id}")
+    except Exception as e:
+        log_error(f"Failed to hard-delete settings for {guild_id}", exc_info=e)
+
+async def restore_guild_settings(guild_id: int):
+    """
+    Restores soft-deleted settings.
+    """
+    if not db.connection:
+        return
+
+    try:
+        await db.connection.execute(
+            "UPDATE guild_settings SET deleted_at = NULL WHERE guild_id = ?", 
+            (guild_id,)
+        )
+        await db.connection.commit()
+        log_database(f"Restored settings for guild {guild_id}")
+    except Exception as e:
+        log_error(f"Failed to restore settings for {guild_id}", exc_info=e)
+
+async def check_soft_deleted_settings(guild_id: int) -> bool:
+    """
+    Checks if a guild has soft-deleted settings.
+    """
+    if not db.connection:
+        return False
+        
+    try:
+        cursor = await db.connection.execute(
+            "SELECT 1 FROM guild_settings WHERE guild_id = ? AND deleted_at IS NOT NULL", 
+            (guild_id,)
+        )
+        return await cursor.fetchone() is not None
+    except Exception:
+        return False

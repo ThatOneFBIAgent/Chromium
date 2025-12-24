@@ -74,7 +74,8 @@ class DatabaseManager:
                 message_log_id INTEGER, -- Message logs
                 member_log_id INTEGER, -- Member/User logs
                 suspicious_channel_id INTEGER, -- Optional override
-                enabled_modules TEXT DEFAULT '{}' -- JSON string
+                enabled_modules TEXT DEFAULT '{}', -- JSON string
+                deleted_at DATETIME DEFAULT NULL -- Soft delete timestamp
             );
             """,
             """

@@ -23,13 +23,13 @@ class LogManagement(commands.Cog):
     @app_commands.guild_only()
     @app_commands.checks.has_permissions(manage_guild=True)
     async def list_modules(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=False)
         log_id, msg_id, mem_id, susp_id, enabled_modules = await get_guild_settings(interaction.guild_id)
         
         # Check configuration
         if not log_id and not msg_id and not mem_id:
-            await interaction.response.send_message(
-                embed=EmbedBuilder.error("Not Configured", "This server does not have Chromium configured! Run `/setup` first."),
-                ephemeral=True
+            await interaction.followup.send(
+                embed=EmbedBuilder.error("Not Configured", "This server does not have Chromium configured! Run `/setup` first.")
             )
             return
 
@@ -43,19 +43,20 @@ class LogManagement(commands.Cog):
             title="Logging Modules",
             description=status_text
         )
-        await interaction.response.send_message(embed=embed)
+        await interaction.followup.send(embed=embed)
 
     @log_group.command(name="enable", description="Enable a logging module")
     @app_commands.guild_only()
     @app_commands.checks.has_permissions(manage_guild=True)
     async def enable_module(self, interaction: discord.Interaction, module: str):
+        await interaction.response.defer()
         if module not in MODULES:
-            await interaction.response.send_message(f"Invalid module: {module}", ephemeral=True)
+            await interaction.followup.send(f"Invalid module: {module}", ephemeral=True)
             return
             
         await upsert_guild_settings(interaction.guild_id, enabled_modules={module: True})
         
-        await interaction.response.send_message(
+        await interaction.followup.send(
             embed=EmbedBuilder.success("Module Enabled", f"**{module}** is now enabled.")
         )
         
@@ -70,8 +71,9 @@ class LogManagement(commands.Cog):
     @app_commands.guild_only()
     @app_commands.checks.has_permissions(manage_guild=True)
     async def disable_module(self, interaction: discord.Interaction, module: str):
+        await interaction.response.defer()
         if module not in MODULES:
-            await interaction.response.send_message(f"Invalid module: {module}", ephemeral=True)
+            await interaction.followup.send(f"Invalid module: {module}", ephemeral=True)
             return
 
         await upsert_guild_settings(interaction.guild_id, enabled_modules={module: False})

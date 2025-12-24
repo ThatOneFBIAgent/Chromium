@@ -67,6 +67,16 @@ class BaseLogger(commands.Cog):
                 return
 
             channel = guild.get_channel(target_id)
+            
+            # Fallback Logic: If specific channel is missing, try main log_id
+            if not channel and target_id != log_id and log_id:
+                channel = guild.get_channel(log_id)
+                if channel:
+                    if embed.footer and embed.footer.text:
+                        embed.set_footer(text=f"{embed.footer.text} | Note: Original channel missing. Run /setup to fix.")
+                    else:
+                        embed.set_footer(text="Note: Original channel missing. Run /setup to fix.")
+            
             if channel:
                 await channel.send(embed=embed)
 

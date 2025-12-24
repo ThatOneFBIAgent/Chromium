@@ -65,6 +65,8 @@ class Chromium(commands.AutoShardedBot):
 
         if failed_extensions:
             log_error(f"Failed to load extensions: {failed_extensions}")
+        else:
+            log_discord("All extensions loaded successfully.")
 
     async def on_ready(self):
         log_network(f"Logged in as {self.user} (ID: {self.user.id})")

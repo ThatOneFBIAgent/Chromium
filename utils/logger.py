@@ -2,6 +2,7 @@ import logging
 import sys
 from datetime import datetime
 from colorama import init, Fore, Style
+from config import shared_config
 
 # Initialize colorama
 init(autoreset=True)

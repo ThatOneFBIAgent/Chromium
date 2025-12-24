@@ -33,6 +33,7 @@ class Setup(commands.Cog):
     @setup_group.command(name="simple", description="Use the current channel for all logs")
     @app_commands.guild_only()
     @app_commands.checks.has_permissions(administrator=True)
+    @app_commands.checks.cooldown(1, 30.0, key=lambda i: (i.guild_id, i.user.id))
     async def simple_setup(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=False) # Not ephemeral so buttons are visible to admins (or keep ephemeral if desired, but view handles checks)
         
