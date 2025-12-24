@@ -2,7 +2,10 @@ import json
 import aiosqlite
 from datetime import datetime
 from typing import List, Optional, Dict, Tuple
-from .core import db, log_error, log_database
+from .core import db
+from utils.logger import get_logger
+
+log = get_logger()
 
 async def upsert_guild_settings(
     guild_id: int, 
@@ -67,7 +70,7 @@ async def upsert_guild_settings(
         """, (guild_id, final_log, final_msg_log, final_mem_log, final_susp, final_modules_json))
         await db.connection.commit()
     except Exception as e:
-        log_error(f"Failed to upsert settings for guild {guild_id}", exc_info=e)
+        log.error(f"Failed to upsert settings for guild {guild_id}", exc_info=e)
 
 async def get_guild_settings(guild_id: int):
     """
@@ -89,7 +92,7 @@ async def get_guild_settings(guild_id: int):
             return row[0], row[1], row[2], row[3], json.loads(row[4]) if row[4] else {}
         return None, None, None, None, {}
     except Exception as e:
-        log_error(f"Failed to fetch settings for guild {guild_id}", exc_info=e)
+        log.error(f"Failed to fetch settings for guild {guild_id}", exc_info=e)
         return None, None, None, None, {}
 
 async def add_log(guild_id: int, module_name: str, content: str):
@@ -112,7 +115,7 @@ async def add_log(guild_id: int, module_name: str, content: str):
         
         await db.connection.commit()
     except Exception as e:
-        log_error(f"Failed to add log for guild {guild_id}", exc_info=e)
+        log.error(f"Failed to add log for guild {guild_id}", exc_info=e)
 
 async def get_recent_logs(guild_id: int, limit: int = 50):
     if not db.connection:
@@ -124,7 +127,7 @@ async def get_recent_logs(guild_id: int, limit: int = 50):
         rows = await cursor.fetchall()
         return rows
     except Exception as e:
-        log_error(f"Failed to fetch logs for guild {guild_id}", exc_info=e)
+        log.error(f"Failed to fetch logs for guild {guild_id}", exc_info=e)
         return []
 
 async def delete_guild_settings(guild_id: int):
@@ -140,9 +143,9 @@ async def delete_guild_settings(guild_id: int):
             (guild_id,)
         )
         await db.connection.commit()
-        log_database(f"Soft-deleted settings for guild {guild_id}")
+        log.database(f"Soft-deleted settings for guild {guild_id}")
     except Exception as e:
-        log_error(f"Failed to soft-delete settings for {guild_id}", exc_info=e)
+        log.error(f"Failed to soft-delete settings for {guild_id}", exc_info=e)
 
 async def hard_delete_guild_settings(guild_id: int):
     """
@@ -155,9 +158,9 @@ async def hard_delete_guild_settings(guild_id: int):
         await db.connection.execute("DELETE FROM guild_settings WHERE guild_id = ?", (guild_id,))
         await db.connection.execute("DELETE FROM logs WHERE guild_id = ?", (guild_id,))
         await db.connection.commit()
-        log_database(f"Hard-deleted settings for guild {guild_id}")
+        log.database(f"Hard-deleted settings for guild {guild_id}")
     except Exception as e:
-        log_error(f"Failed to hard-delete settings for {guild_id}", exc_info=e)
+        log.error(f"Failed to hard-delete settings for {guild_id}", exc_info=e)
 
 async def restore_guild_settings(guild_id: int):
     """
@@ -172,9 +175,9 @@ async def restore_guild_settings(guild_id: int):
             (guild_id,)
         )
         await db.connection.commit()
-        log_database(f"Restored settings for guild {guild_id}")
+        log.database(f"Restored settings for guild {guild_id}")
     except Exception as e:
-        log_error(f"Failed to restore settings for {guild_id}", exc_info=e)
+        log.error(f"Failed to restore settings for {guild_id}", exc_info=e)
 
 async def check_soft_deleted_settings(guild_id: int) -> bool:
     """
