@@ -48,8 +48,8 @@ class ColoredFormatter(logging.Formatter):
         
         # Dynamic Time Formatting
         if shared_config.IS_RAILWAY:
-            # Show relative time (uptime) in ms
-            time_str = f"{record.relativeCreated:.0f}ms"
+            # Show relative time (uptime) in ms truncated to 3 last digits
+            time_str = f"{record.relativeCreated:.3f}ms"
         else:
             # Show full timestamp for local debugging
             time_str = datetime.fromtimestamp(record.created).strftime('%Y-%m-%d %H:%M:%S')
@@ -68,7 +68,7 @@ class ColoredFormatter(logging.Formatter):
         # In Flurazide, get_logger sets the logger name. 
         # The formatter here uses the pathname to derive context dynamically. 
         # Ideally, we primarily use the logger name if it's meaningful, but the path fallback is robust.
-        # Let's stick to the path fallback for consistency with the requested style.
+        # Let's stick to the path fallback for consistency.
         
         formatted = f"[{time_str}] [{record.levelname:^8}] [{module_name}] {record.getMessage()}"
 

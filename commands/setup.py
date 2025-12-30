@@ -35,7 +35,7 @@ class Setup(commands.Cog):
     @app_commands.checks.has_permissions(administrator=True)
     @app_commands.checks.cooldown(1, 30.0, key=lambda i: (i.guild_id, i.user.id))
     async def simple_setup(self, interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=False) # Not ephemeral so buttons are visible to admins (or keep ephemeral if desired, but view handles checks)
+        await interaction.response.defer(ephemeral=False) 
         
         # Confirmation Stage
         view = ConfirmationView(timeout=180.0, author_id=interaction.user.id)
@@ -112,6 +112,7 @@ class Setup(commands.Cog):
         
         try:
             # Check for existing Category
+            # this would be better if discord allowed categories to have IDs to check for but oh well
             category = discord.utils.get(guild.categories, name="ChromiumLogs")
             if not category:
                 category = await guild.create_category("ChromiumLogs")

@@ -1,3 +1,8 @@
+#    Chromium - A more cleaner structure of Flurazide and logging system
+#    (okay "cleaner" for the improved structure)
+#    © 2024-2026  Iza Carlos (Aka Carlos E.)
+#    Licensed under the GNU Affero General Public License v3.0
+
 import discord
 from discord.ext import commands
 import os

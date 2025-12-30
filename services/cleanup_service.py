@@ -34,6 +34,7 @@ class CleanupService(commands.Cog):
             # IF foreign keys are enforcing it. 
             # core.py HAS "FOREIGN KEY (guild_id) REFERENCES guild_settings(guild_id) ON DELETE CASCADE"
             # So deleting guild_settings is enough!
+            # goodie good schizophrenia
             
             cursor = await db.connection.execute(f"""
                 DELETE FROM guild_settings 
