@@ -161,7 +161,7 @@ class Setup(commands.Cog):
             
             embed = EmbedBuilder.success(
                 title="Complex Setup Complete",
-                description="Secure logging channels created.",
+                description="Server logging channels created.",
                 fields=[
                     ("Category", category.name, True),
                     ("Server Logs", server_logs.mention, True),

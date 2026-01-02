@@ -55,8 +55,11 @@ class Chromium(commands.AutoShardedBot):
         
         # Sync generic commands (global)
         try:
-            synced = await self.tree.sync()
+            log.info("Starting command tree sync...")
+            synced = await asyncio.wait_for(self.tree.sync(), timeout=30.0)
             log.discord(f"Synced {len(synced)} command(s) globally.")
+        except asyncio.TimeoutError:
+            log.error("Command tree sync timed out after 30 seconds.")
         except Exception as e:
             log.error("Failed to sync commands", exc_info=e)
 

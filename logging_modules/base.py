@@ -166,6 +166,7 @@ class BaseLogger(commands.Cog):
                 content += " | " + " | ".join([f"{f.name}: {f.value}" for f in embed.fields])
             
             await add_log(guild.id, self.module_name, content)
-            
+        except discord.errors.Forbidden:
+            log.error(f"Forbidden to send log in {guild.name}, bot may have been kicked")
         except Exception as e:
             log.error(f"Error logging event in {self.module_name}", exc_info=e)

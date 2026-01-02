@@ -106,7 +106,7 @@ def get_logger(name=None) -> logging.Logger:
             name = "Chromium"
 
     logger = logging.getLogger(name)
-    logger.setLevel(logging.TRACE_LEVEL if shared_config.ENVIRONMENT == "development" else logging.INFO)
+    logger.setLevel(logging.TRACE_LEVEL if shared_config.ENVIRONMENT == "development" else logging.EVENT_LEVEL)
     
     # Check if handler exists to avoid duplicates
     if not logger.handlers:
