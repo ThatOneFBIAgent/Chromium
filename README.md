@@ -49,6 +49,7 @@ Key features include per-guild isolated logging, suspicion heuristics, database 
    DRIVE_CREDS_B64=base64_encoded_service_account_json (Optional)
    DRIVE_FOLDER_ID=your_folder_id (Optional)
    ```
+   ###### Technically it's mean to be an OAuth2 token, in json form. Despite it saying "service account" in the name. And detection of which is not very reliable.
 4. **Run the bot**:
    ```bash
    python bot.py
