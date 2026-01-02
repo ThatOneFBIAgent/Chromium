@@ -6,83 +6,46 @@ from utils.suspicious import suspicious_detector
 
 class MessageDelete(BaseLogger):
     @commands.Cog.listener()
-    async def on_raw_message_delete(self, payload: discord.RawMessageDeleteEvent):
-
-        msg = payload.cached_message
-
-        guild = None
-        channel = None
-        author = None
-        is_bot = None
-
-        if payload.guild_id:
-            guild = self.bot.get_guild(payload.guild_id)
-            if guild:
-                channel = guild.get_channel(payload.channel_id)
-
-        # If message was cached, extract data
-        if msg is not None:
-            author = msg.author
-            is_bot = author.bot
-
-        # Decide whether to log
-        author_id = author.id if author else None
-
-        if not await self.should_log(payload.guild_id, author_id, payload.channel_id):
+    async def on_message_delete(self, message: discord.Message):
+        if not await self.should_log(message.guild, message.author, message.channel):
             return
 
-        # Skip bot deletions if desired
-        if is_bot:
-            footer = "| (Bot)"
+        if message.author.bot:
+            footer = " | (Bot)"
+
+        if not message.guild:
             return
 
-        # Suspicious detector fallback
-        is_suspicious = suspicious_detector.check_message_delete(payload.guild_id, author_id)
+        # Suspicious check
+        is_suspicious = suspicious_detector.check_message_delete(message.guild.id, message.author.id)
+        
+        description = f"**Message sent by {message.author.mention} deleted in {message.channel.mention}**\n"
+        if message.content:
+            description += f"\n**Content:**\n{message.content}"
+        
+        # Attachments
+        def format_attachments(attachments):
+            lines = []
+            for a in attachments:
+                size_kb = round(a.size / 1024, 2)
+                spoiler = " (spoiler)" if a.is_spoiler() else ""
+                lines.append(
+                    f"- `{a.filename}` ({size_kb} KB){spoiler}\n{a.url}"
+                )
+            return "\n".join(lines)
 
-        # Build description safely
-        description = ""
-
-        if author:
-            description += f"**Message sent by {author.mention} deleted"
-        else:
-            description += f"**Message deleted"
-
-        if channel:
-            description += f" in {channel.mention}**\n"
-        else:
-            description += "**\n"
-
-        # Content if available
-        if msg and msg.content:
-            description += f"\n**Content:**\n{msg.content}"
-        else:
-            description += "\n**Content:**\nNo content available"
-
-        # Attachments if available
-        if msg and msg.attachments:
-            def format_attachments(attachments):
-                lines = []
-                for a in attachments:
-                    size_kb = round(a.size / 1024, 2)
-                    spoiler = " (spoiler)" if a.is_spoiler() else ""
-                    lines.append(
-                        f"- `{a.filename}` ({size_kb} KB){spoiler}\n{a.url}"
-                    )
-                return "\n".join(lines)
-
+        if message.attachments:
             description += "\n\n**Attachments:**\n"
-            description += format_attachments(msg.attachments)
+            description += format_attachments(message.attachments)
 
         embed = EmbedBuilder.error(
             title="Message Deleted",
             description=description,
-            author=author,
-            footer=f"User ID: {author.id if author else 'Unknown'} "
-                f"| Message ID: {payload.message_id}"
+            author=message.author,
+            footer=f"User ID: {message.author.id} | Message ID: {message.id}{footer}"
         )
-
-        if guild:
-            await self.log_event(guild, embed, suspicious=is_suspicious)
+        
+        await self.log_event(message.guild, embed, suspicious=is_suspicious)
 
     @commands.Cog.listener()
     async def on_bulk_message_delete(self, messages: list[discord.Message]):
