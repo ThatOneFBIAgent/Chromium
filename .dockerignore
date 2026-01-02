@@ -15,5 +15,7 @@ bot_database.sqlite-journal
 *.log
 *.md
 LICENSE
+tests/
+tests/*
 
 # basically gitignore but for docker so the image is smaller
