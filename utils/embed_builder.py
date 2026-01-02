@@ -1,5 +1,5 @@
 import discord
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 MAX_TITLE = 256
@@ -31,7 +31,7 @@ class EmbedBuilder:
             title=clamp(title, MAX_TITLE),
             description=clamp(description, MAX_DESC),
             color=color,
-            timestamp=datetime.utcnow()
+            timestamp=datetime.now(timezone.utc)
         )
 
         if author:

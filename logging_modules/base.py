@@ -41,16 +41,25 @@ class BaseLogger(commands.Cog):
         channel_wl = set()
         
         for item in items:
-            # item: id, guild_id, list_type, entity_type, entity_id
-            e_id = item['entity_id']
-            if item['list_type'] == 'blacklist':
-                if item['entity_type'] == 'user': user_bl.add(e_id)
-                elif item['entity_type'] == 'role': role_bl.add(e_id)
-                elif item['entity_type'] == 'channel': channel_bl.add(e_id)
-            elif item['list_type'] == 'whitelist':
-                if item['entity_type'] == 'user': user_wl.add(e_id)
-                elif item['entity_type'] == 'role': role_wl.add(e_id)
-                elif item['entity_type'] == 'channel': channel_wl.add(e_id)
+            # Robustness: Check for valid data
+            if item.get('guild_id') != guild.id:
+                continue
+            
+            list_type = item.get('list_type')
+            entity_type = item.get('entity_type')
+            e_id = item.get('entity_id')
+
+            if not list_type or not entity_type or not e_id:
+                continue
+
+            if list_type == 'blacklist':
+                if entity_type == 'user': user_bl.add(e_id)
+                elif entity_type == 'role': role_bl.add(e_id)
+                elif entity_type == 'channel': channel_bl.add(e_id)
+            elif list_type == 'whitelist':
+                if entity_type == 'user': user_wl.add(e_id)
+                elif entity_type == 'role': role_wl.add(e_id)
+                elif entity_type == 'channel': channel_wl.add(e_id)
 
         # 1. User Whitelist
         if user and user.id in user_wl:

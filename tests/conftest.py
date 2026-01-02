@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, AsyncMock
 @pytest.fixture
 def mock_guild():
     guild = MagicMock(spec=discord.Guild)
-    guild.id = 123456789
+    guild.id = 1
     guild.owner_id = 999999
     return guild
 

@@ -3,7 +3,7 @@ import discord
 from unittest.mock import AsyncMock, MagicMock
 from logging_modules.base import BaseLogger
 
-# --- Configurable Test Table ---
+# Configurable Test Table
 # Logic:
 # 1- User Whitelist (Allow)
 # 2 - User Blacklist (Block)
@@ -80,6 +80,69 @@ TEST_SCENARIOS = [
             {'guild_id': 1, 'list_type': 'whitelist', 'entity_type': 'user', 'entity_id': 100}
         ],
         True
+    ),
+        (
+        "Duplicate User Whitelist entries should not change behavior",
+        100, 200, [],
+        [
+            {'guild_id': 1, 'list_type': 'whitelist', 'entity_type': 'user', 'entity_id': 100},
+            {'guild_id': 1, 'list_type': 'whitelist', 'entity_type': 'user', 'entity_id': 100}
+        ],
+        True
+    ),
+
+    (
+        "Unknown Guild Rules Ignored",
+        100, 200, [],
+        [
+            {'guild_id': 999, 'list_type': 'blacklist', 'entity_type': 'user', 'entity_id': 100}
+        ],
+        True
+    ),
+
+    (
+        "Invalid Entry Without entity_type Should Not Crash And Should Ignore",
+        100, 200, [],
+        [
+            {'guild_id': 1, 'list_type': 'blacklist', 'entity_id': 100}
+        ],
+        True
+    ),
+    (
+        "Default Deny Mode - No Lists Should Allow (Bot is Opt-Out)",
+        100, 200, [],
+        [],
+        True
+    ),
+    
+    (
+        "Conflicting Roles - Role Whitelist beats Role Blacklist (As per 7-step)",
+        100, 200, [555, 777],
+        [
+            {'guild_id': 1, 'list_type': 'whitelist', 'entity_type': 'role', 'entity_id': 777},
+            {'guild_id': 1, 'list_type': 'blacklist', 'entity_type': 'role', 'entity_id': 555}
+        ],
+        True 
+    ),
+
+    (
+        "User Whitelist beats Role Blacklist",
+        100, 200, [555],
+        [
+            {'guild_id': 1, 'list_type': 'blacklist', 'entity_type': 'role', 'entity_id': 555},
+            {'guild_id': 1, 'list_type': 'whitelist', 'entity_type': 'user', 'entity_id': 100}
+        ],
+        True
+    ),
+
+    (
+        "User Blacklist beats Role Whitelist",
+        100, 200, [777],
+        [
+            {'guild_id': 1, 'list_type': 'whitelist', 'entity_type': 'role', 'entity_id': 777},
+            {'guild_id': 1, 'list_type': 'blacklist', 'entity_type': 'user', 'entity_id': 100}
+        ],
+        False
     )
 ]
 
