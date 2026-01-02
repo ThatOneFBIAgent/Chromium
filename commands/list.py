@@ -17,6 +17,9 @@ class List(commands.Cog):
     # Group: Whitelist
     whitelist = app_commands.Group(name="whitelist", description="Manage the server whitelist")
 
+    # Group: Help
+    help = app_commands.Group(name="help", description="Get help with the list commands")
+
     # Helper: Resolve entity from query (ID or Name)
     def _resolve_entity(self, guild: discord.Guild, query: str):
         # Try ID resolve first
@@ -251,6 +254,27 @@ class List(commands.Cog):
     @whitelist.command(name="show", description="Show whitelist")
     async def whitelist_show(self, interaction: discord.Interaction, page: int = 1):
         await self._show_command(interaction, page, "whitelist")
+
+    @help.command(name="list", description="Get help with the list commands")
+    async def help_list(self, interaction: discord.Interaction):
+        await interaction.response.send_message(
+            embed=EmbedBuilder.info("List Commands", """
+            **Commands:**
+            • `add`: Adds a user, role, or channel to the specified list.
+            • `remove`: Removes an entry from the specified list.
+            • `show`: Displays all entries in the specified list with pagination.
+
+            **Order of Operations:**
+            1 - User Whitelist (The "Suspicious Person" check-log them no matter where they are).
+            2 - User Blacklist (The "Privacy" check-if Joe is blocked, he is blocked everywhere).
+            3 - Channel Whitelist (The "Important Room" check-if this room is whitelisted, log everyone, even blacklisted roles).
+            4 - Role Whitelist (The "Staff/Fanatic" check-log them even in blacklisted channels).
+            5 - Channel Blacklist (The "Private Room" check-don't log unless caught by a higher whitelist).
+            6 - Role Blacklist (The "Ignore Bots/Spammers" check-don't log unless caught by a higher whitelist).
+            7 - DEFAULT: LOG IT (Since the bot is Opt-Out).
+            """
+        )
+    )
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(List(bot))
