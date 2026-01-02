@@ -33,7 +33,7 @@ class DatabaseManager:
             if drive_manager.service:
                 break
             # Try to init if missing
-            drive_manager.initialize_service()
+            await asyncio.to_thread(drive_manager.initialize_service)
             if not drive_manager.service:
                 log.database(f"Drive service not ready, retrying in 2s... ({i+1}/3)")
                 await asyncio.sleep(2)
@@ -44,14 +44,14 @@ class DatabaseManager:
             
         filename = "chromium_database_backup.sqlite"
         try:
-            file_id = drive_manager.find_file(filename)
+            file_id = await asyncio.to_thread(drive_manager.find_file, filename)
             if not file_id:
                 log.database(f"No remote backup found to restore: '{filename}'")
-                drive_manager.debug_list_files()
+                await asyncio.to_thread(drive_manager.debug_list_files)
                 return
                 
             log.database(f"Found remote backup ({file_id}). Downloading...")
-            content = drive_manager.download_file(file_id)
+            content = await asyncio.to_thread(drive_manager.download_file, file_id)
             
             if content:
                 # We assume no connection is active or we are pre-connect

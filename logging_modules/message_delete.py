@@ -12,6 +12,8 @@ class MessageDelete(BaseLogger):
 
         if message.author.bot:
             footer = " | (Bot)"
+        else:
+            footer = ""
 
         if not message.guild:
             return

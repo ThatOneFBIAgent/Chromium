@@ -100,25 +100,29 @@ class Chromium(commands.AutoShardedBot):
             # Shard resumed event — bot reconnected
             log.network(f"[Shard {self.shard_id or '?'}] resumed session in {time.time() - self.start_time:.2f} seconds.")
 
-    async def on_shard_connect(self, shard_id):
-        log.network(f"[Shard {shard_id}] connected successfully in {time.time() - self.start_time:.2f} seconds.")
-
-    async def on_shard_ready(self, shard_id):
-        guilds = [g for g in self.guilds if g.shard_id == shard_id]
-        log.network(f"[Shard {shard_id}] ready - handling {len(guilds)} guild(s).")
-
-    async def on_shard_disconnect(self, shard_id):
-        log.network(f"[Shard {shard_id}] disconnected - waiting for resume.")
-
-    async def on_shard_resumed(self, shard_id):
-        log.network(f"[Shard {shard_id}] resumed connection.")
-
     async def close(self):
         # Note: Logic moved to graceful_shutdown primarily, this is just a super call wrapper now
         await super().close()
 
 # Bot Instance
 bot = Chromium()
+
+@bot.event
+async def on_shard_connect(shard_id):
+    log.network(f"[Shard {shard_id}] connected successfully in {time.time() - bot.start_time:.2f} seconds.")
+
+@bot.event
+async def on_shard_ready(shard_id):
+    guilds = [g for g in bot.guilds if g.shard_id == shard_id]
+    log.network(f"[Shard {shard_id}] ready - handling {len(guilds)} guild(s).")
+
+@bot.event
+async def on_shard_disconnect(shard_id):
+    log.network(f"[Shard {shard_id}] disconnected - waiting for resume.")
+
+@bot.event
+async def on_shard_resumed(shard_id):
+    log.network(f"[Shard {shard_id}] resumed connection.")
 
 async def kill_all_tasks():
     current = asyncio.current_task()
@@ -143,12 +147,12 @@ async def graceful_shutdown():
                 db_content = f.read()
 
              backup_name = "chromium_database_backup.sqlite"
-             existing_id = drive_manager.find_file(backup_name)
+             existing_id = await asyncio.to_thread(drive_manager.find_file, backup_name)
              
              if existing_id:
-                 drive_manager.update_file(existing_id, db_content)
+                 await asyncio.to_thread(drive_manager.update_file, existing_id, db_content)
              else:
-                 drive_manager.upload_file(backup_name, db_content)
+                 await asyncio.to_thread(drive_manager.upload_file, backup_name, db_content)
                  
              log.info("Database backup completed.")
     except Exception as e:
