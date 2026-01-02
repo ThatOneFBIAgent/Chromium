@@ -11,6 +11,7 @@ Key features include per-guild isolated logging, suspicion heuristics, database 
 - **Suspicious Activity Detection**: Detects spam deletes/edits/joins and flags them in logs.
 - **Slash Commands**: Full setup and management via `/setup`, `/log`, and `/export`.
 - **Exports**: Export logs to a JSON file, with optional Google Drive upload.
+- **Blacklisting & Whitelisting**: Blacklist/Whitelist users, roles, channels from logging.
 - **Sharding**: Built on `AutoShardedBot` for scalability.
 - **Docker Ready**: Includes production-grade Dockerfile with non-root user.
 

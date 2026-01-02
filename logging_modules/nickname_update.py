@@ -8,6 +8,10 @@ class NicknameUpdate(BaseLogger):
     async def on_member_update(self, before: discord.Member, after: discord.Member):
         # We want to track NICKNAME changes, which are reflected in display_name
         # (display_name is nick if present, else name)
+        
+        if not await self.should_log(before.guild, user=before):
+            return    
+        
         if before.display_name == after.display_name:
             return
 

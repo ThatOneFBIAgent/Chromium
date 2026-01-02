@@ -23,7 +23,9 @@ class Setup(commands.Cog):
                 ("/log list", "List status of all logging modules.", False),
                 ("/log enable <module>", "Enable a specific logging module.", False),
                 ("/log disable <module>", "Disable a specific logging module.", False),
-                ("/export", "Export the last 50 logs to a JSON file.", False)
+                ("/export", "Export the last 50 logs to a JSON file.", False),
+                ("/blacklist add|remove|show", "Blacklist a user, role or channelfrom logging.", False),
+                ("/whitelist add|remove|show", "Whitelist a user or role from logging.", False)
             ]
         )
         await interaction.response.send_message(embed=embed, ephemeral=True)

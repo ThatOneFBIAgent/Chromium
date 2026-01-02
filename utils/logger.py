@@ -49,7 +49,8 @@ class ColoredFormatter(logging.Formatter):
         # Dynamic Time Formatting
         if shared_config.IS_RAILWAY:
             # Show relative time (uptime) in ms truncated to 3 last digits
-            time_str = f"{record.relativeCreated:.3f}ms"
+            ms = int(record.relativeCreated) % 1000
+            time_str = f"{ms:03d}ms"
         else:
             # Show full timestamp for local debugging
             time_str = datetime.fromtimestamp(record.created).strftime('%Y-%m-%d %H:%M:%S')

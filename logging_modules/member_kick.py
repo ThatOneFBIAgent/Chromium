@@ -7,6 +7,9 @@ import asyncio
 class MemberKick(BaseLogger):
     @commands.Cog.listener()
     async def on_member_remove(self, member: discord.Member):
+        if not await self.should_log(member.guild, user=member):
+            return    
+        
         await asyncio.sleep(1)
 
         try:

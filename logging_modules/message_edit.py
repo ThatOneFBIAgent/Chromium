@@ -13,6 +13,9 @@ class MessageEdit(BaseLogger):
         if not before.guild:
             return
 
+        if not await self.should_log(before.guild, before.author, before.channel):
+            return    
+
         before_files = {a.filename for a in before.attachments}
         after_files = {a.filename for a in after.attachments}
 

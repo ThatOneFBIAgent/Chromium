@@ -13,6 +13,9 @@ class MessageDelete(BaseLogger):
         if not message.guild:
             return
 
+        if not await self.should_log(message.guild, message.author, message.channel):
+            return
+
         # Suspicious check
         is_suspicious = suspicious_detector.check_message_delete(message.guild.id, message.author.id)
         

@@ -1,8 +1,8 @@
 from abc import ABC, abstractmethod
 import discord
-from typing import Optional
+from typing import Optional, Union, List
 from discord.ext import commands
-from database.queries import get_guild_settings, add_log
+from database.queries import get_guild_settings, add_log, get_all_list_items
 from utils.embed_builder import EmbedBuilder
 from utils.logger import get_logger
 from utils.suspicious import suspicious_detector
@@ -13,6 +13,66 @@ class BaseLogger(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self.module_name = self.__class__.__name__
+
+    async def should_log(self, guild: discord.Guild, user: Union[discord.User, discord.Member, None] = None, channel: Optional[discord.abc.GuildChannel] = None) -> bool:
+        """
+        Check if the event should be logged based on blacklists/whitelists.
+        Order:
+        1 - User blacklists
+        2 - Channel blacklist
+        3 - User whitelist
+        4 - Role blacklist
+        5 - Role whitelist
+        """
+        # Fetch all list items for this guild
+        # TODO: This should ideally be cached. For now, one DB hit per log event is acceptable but not optimal.
+        items = await get_all_list_items(guild.id)
+        
+        if not items:
+            return True
+
+        # Organize items
+        user_bl = set()
+        user_wl = set()
+        role_bl = set()
+        role_wl = set()
+        channel_bl = set()
+        
+        for item in items:
+            # item: id, guild_id, list_type, entity_type, entity_id
+            e_id = item['entity_id']
+            if item['list_type'] == 'blacklist':
+                if item['entity_type'] == 'user': user_bl.add(e_id)
+                elif item['entity_type'] == 'role': role_bl.add(e_id)
+                elif item['entity_type'] == 'channel': channel_bl.add(e_id)
+            elif item['list_type'] == 'whitelist':
+                if item['entity_type'] == 'user': user_wl.add(e_id)
+                elif item['entity_type'] == 'role': role_wl.add(e_id)
+                # channel whitelist ignored per request
+
+        # 1. User Blacklist
+        if user and user.id in user_bl:
+            return False
+            
+        # 2. Channel Blacklist
+        if channel and channel.id in channel_bl:
+            return False
+            
+        # 3. User Whitelist (Overrides Role Blacklist)
+        if user and user.id in user_wl:
+            return True
+            
+        # 4. Role Blacklist
+        if user and isinstance(user, discord.Member):
+            for role in user.roles:
+                if role.id in role_bl:
+                    # 5. Role Whitelist: Overrides Role Blacklist
+                    has_whitelisted_role = any(r.id in role_wl for r in user.roles)
+                    if has_whitelisted_role:
+                        return True
+                    return False
+                    
+        return True
 
     async def get_log_channel(self, guild: discord.Guild) -> Optional[discord.TextChannel]:
         log_id, msg_id, mem_id, susp_id, enabled_modules = await get_guild_settings(guild.id)

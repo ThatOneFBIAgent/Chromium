@@ -6,6 +6,9 @@ from utils.embed_builder import EmbedBuilder
 class VoiceState(BaseLogger):
     @commands.Cog.listener()
     async def on_voice_state_update(self, member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
+        if not await self.should_log(member.guild, user=member):
+            return    
+        
         if member.bot:
             return
             

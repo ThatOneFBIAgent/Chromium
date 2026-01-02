@@ -93,6 +93,22 @@ class DatabaseManager:
             """,
             """
             CREATE INDEX IF NOT EXISTS idx_logs_guild ON logs(guild_id);
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS server_lists (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                guild_id INTEGER NOT NULL,
+                list_type TEXT NOT NULL, -- 'blacklist' or 'whitelist'
+                entity_type TEXT NOT NULL, -- 'role', 'user', 'channel'
+                entity_id INTEGER NOT NULL,
+                entity_name TEXT, -- Stored for fuzzy matching in DB
+                added_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (guild_id) REFERENCES guild_settings(guild_id) ON DELETE CASCADE,
+                UNIQUE(guild_id, list_type, entity_id)
+            );
+            """,
+            """
+            CREATE INDEX IF NOT EXISTS idx_lists_guild ON server_lists(guild_id, list_type);
             """
         ]
         

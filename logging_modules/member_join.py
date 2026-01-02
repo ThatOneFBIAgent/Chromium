@@ -8,6 +8,9 @@ import datetime
 class MemberJoin(BaseLogger):
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
+        if not await self.should_log(member.guild, user=member):
+            return    
+        
         guild = member.guild
         
         # Suspicious check (raid detection)

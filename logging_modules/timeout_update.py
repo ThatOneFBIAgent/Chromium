@@ -7,6 +7,9 @@ from datetime import datetime
 class TimeoutUpdate(BaseLogger):
     @commands.Cog.listener()
     async def on_member_update(self, before: discord.Member, after: discord.Member):
+        if not await self.should_log(before.guild, user=before):
+            return    
+        
         if before.communication_disabled_until == after.communication_disabled_until:
             return
 

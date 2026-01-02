@@ -194,3 +194,100 @@ async def check_soft_deleted_settings(guild_id: int) -> bool:
         return await cursor.fetchone() is not None
     except Exception:
         return False
+
+async def add_list_item(guild_id: int, list_type: str, entity_type: str, entity_id: int, entity_name: str):
+    """
+    Adds an item to the blacklist or whitelist.
+    """
+    if not db.connection:
+        return False
+        
+    try:
+        await db.connection.execute(
+            """
+            INSERT INTO server_lists (guild_id, list_type, entity_type, entity_id, entity_name) 
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(guild_id, list_type, entity_id) DO UPDATE SET
+                entity_name = excluded.entity_name,
+                entity_type = excluded.entity_type
+            """, 
+            (guild_id, list_type, entity_type, entity_id, entity_name)
+        )
+        await db.connection.commit()
+        return True
+    except Exception as e:
+        log.error(f"Failed to add list item for guild {guild_id}", exc_info=e)
+        return False
+
+async def remove_list_item(guild_id: int, list_type: str, entity_id: int):
+    """
+    Removes an item from the blacklist or whitelist.
+    """
+    if not db.connection:
+        return False
+        
+    try:
+        await db.connection.execute(
+            "DELETE FROM server_lists WHERE guild_id = ? AND list_type = ? AND entity_id = ?",
+            (guild_id, list_type, entity_id)
+        )
+        await db.connection.commit()
+        return True
+    except Exception as e:
+        log.error(f"Failed to remove list item for guild {guild_id}", exc_info=e)
+        return False
+
+async def get_list_items(guild_id: int, list_type: str):
+    """
+    Returns all items for a specific list type.
+    """
+    if not db.connection:
+        return []
+        
+    try:
+        db.connection.row_factory = aiosqlite.Row
+        cursor = await db.connection.execute(
+            "SELECT * FROM server_lists WHERE guild_id = ? AND list_type = ? ORDER BY added_at DESC", 
+            (guild_id, list_type)
+        )
+        return await cursor.fetchall()
+    except Exception as e:
+        log.error(f"Failed to fetch list items for guild {guild_id}", exc_info=e)
+        return []
+
+async def search_list_items(guild_id: int, list_type: str, query: str):
+    """
+    Fuzzy searches for items in the DB for a specific list.
+    """
+    if not db.connection:
+        return []
+        
+    try:
+        db.connection.row_factory = aiosqlite.Row
+        # Simple SQL LIKE for now, can be improved or done in python if more fuzzy needed
+        cursor = await db.connection.execute(
+            "SELECT * FROM server_lists WHERE guild_id = ? AND list_type = ? AND entity_name LIKE ? LIMIT 25", 
+            (guild_id, list_type, f"%{query}%")
+        )
+        return await cursor.fetchall()
+    except Exception as e:
+        log.error(f"Failed to search list items for guild {guild_id}", exc_info=e)
+        return []
+
+async def get_all_list_items(guild_id: int):
+    """
+    Returns all blacklist/whitelist items for a guild.
+    """
+    if not db.connection:
+        return []
+        
+    try:
+        db.connection.row_factory = aiosqlite.Row
+        cursor = await db.connection.execute(
+            "SELECT * FROM server_lists WHERE guild_id = ?", 
+            (guild_id,)
+        )
+        return await cursor.fetchall()
+    except Exception as e:
+        log.error(f"Failed to fetch all list items for guild {guild_id}", exc_info=e)
+        return []

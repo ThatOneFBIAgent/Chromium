@@ -6,6 +6,9 @@ from utils.embed_builder import EmbedBuilder
 class MemberLeave(BaseLogger):
     @commands.Cog.listener()
     async def on_member_remove(self, member: discord.Member):
+        if not await self.should_log(member.guild, user=member):
+            return    
+        
         guild = member.guild
         
         description = f"{member.mention} {member.name} has left the server."
