@@ -58,13 +58,13 @@ class BackupService(commands.Cog):
                 return
             
             # Check if exists
-            existing_id = drive_manager.find_file(backup_filename)
+            existing_id = await asyncio.to_thread(drive_manager.find_file, backup_filename)
             
             if existing_id:
-                link = drive_manager.update_file(existing_id, content_bytes, mimetype='application/x-sqlite3')
+                link = await asyncio.to_thread(drive_manager.update_file, existing_id, content_bytes, 'application/x-sqlite3')
                 action = "Updated"
             else:
-                link = drive_manager.upload_file(backup_filename, content_bytes, mimetype='application/x-sqlite3')
+                link = await asyncio.to_thread(drive_manager.upload_file, backup_filename, content_bytes, 'application/x-sqlite3')
                 action = "Uploaded"
             
             if link:

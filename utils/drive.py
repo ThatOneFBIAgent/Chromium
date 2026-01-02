@@ -17,7 +17,7 @@ class DriveManager:
         self.creds_dict = shared_config.get_drive_creds()
         self.folder_id = shared_config.DRIVE_FOLDER_ID
         self.service = None
-        self.initialize_service()
+        # Note: initialize_service is now called lazily on first use, not at import time
 
     def initialize_service(self):
         if self.service:
@@ -56,6 +56,7 @@ class DriveManager:
         Uploads content as a file to Google Drive. Returns the webViewLink or None.
         Content can be str (utf-8) or bytes.
         """
+        self.initialize_service()
         if not self.service or not self.folder_id:
             return None
 
@@ -88,6 +89,7 @@ class DriveManager:
 
     def find_file(self, filename: str) -> Optional[str]:
         """Finds a file by name in the configured folder. Returns file_id or None."""
+        self.initialize_service()
         if not self.service or not self.folder_id:
             return None
 
@@ -107,6 +109,7 @@ class DriveManager:
 
     def update_file(self, file_id: str, content: int | str | bytes, mimetype: str = 'text/plain') -> Optional[str]:
         """Updates an existing file's content."""
+        self.initialize_service()
         if not self.service:
             return None
             
@@ -134,6 +137,7 @@ class DriveManager:
 
     def download_file(self, file_id: str) -> Optional[bytes]:
         """Downloads a file's content by ID."""
+        self.initialize_service()
         if not self.service:
             return None
             
@@ -154,6 +158,7 @@ class DriveManager:
 
     def debug_list_files(self, limit: int = 10):
         """Lists files in the configured folder to debug visibility."""
+        self.initialize_service()
         if not self.service or not self.folder_id:
             return
             
