@@ -12,7 +12,7 @@ class Setup(commands.Cog):
 
     setup_group = app_commands.Group(name="setup", description="Configure the bot for your server")
     
-    @app_commands.command(name="help", description="Show available commands")
+    @app_commands.command(name="commands", description="Show available commands")
     async def cmd_help(self, interaction: discord.Interaction):
         embed = EmbedBuilder.build(
             title="Chromium Help",
@@ -24,7 +24,7 @@ class Setup(commands.Cog):
                 ("/log enable <module>", "Enable a specific logging module.", False),
                 ("/log disable <module>", "Disable a specific logging module.", False),
                 ("/export", "Export the last 50 logs to a JSON file.", False),
-                ("/blacklist add|remove|show", "Blacklist a user, role or channelfrom logging.", False),
+                ("/blacklist add|remove|show", "Blacklist a user, role or channel from logging.", False),
                 ("/whitelist add|remove|show", "Whitelist a user or role from logging.", False)
             ]
         )

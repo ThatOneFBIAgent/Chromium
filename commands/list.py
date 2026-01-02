@@ -17,8 +17,8 @@ class List(commands.Cog):
     # Group: Whitelist
     whitelist = app_commands.Group(name="whitelist", description="Manage the server whitelist")
 
-    # Group: Help
-    help = app_commands.Group(name="help", description="Get help with the list commands")
+    # Group: List (don't use 'list' as it's a reserved keyword)
+    list_name = app_commands.Group(name="list", description="General list commands")
 
     # Helper: Resolve entity from query (ID or Name)
     def _resolve_entity(self, guild: discord.Guild, query: str):
@@ -255,7 +255,7 @@ class List(commands.Cog):
     async def whitelist_show(self, interaction: discord.Interaction, page: int = 1):
         await self._show_command(interaction, page, "whitelist")
 
-    @help.command(name="list", description="Get help with the list commands")
+    @list_name.command(name="help", description="Get help with the list commands")
     async def help_list(self, interaction: discord.Interaction):
         await interaction.response.send_message(
             embed=EmbedBuilder.info("List Commands", """
