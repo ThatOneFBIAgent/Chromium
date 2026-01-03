@@ -195,6 +195,28 @@ async def check_soft_deleted_settings(guild_id: int) -> bool:
     except Exception:
         return False
 
+async def restore_settings_for_active_guilds(guild_ids: list[int]) -> int:
+    """
+    Restores soft-deleted settings for guilds the bot is currently in.
+    This handles the case where the database was restored with stale deleted_at flags.
+    Returns the number of guilds restored.
+    """
+    if not db.connection or not guild_ids:
+        return 0
+        
+    try:
+        # Build placeholders for the IN clause
+        placeholders = ','.join('?' * len(guild_ids))
+        cursor = await db.connection.execute(
+            f"UPDATE guild_settings SET deleted_at = NULL WHERE guild_id IN ({placeholders}) AND deleted_at IS NOT NULL",
+            guild_ids
+        )
+        await db.connection.commit()
+        return cursor.rowcount
+    except Exception as e:
+        log.error("Failed to restore settings for active guilds", exc_info=e)
+        return 0
+
 async def add_list_item(guild_id: int, list_type: str, entity_type: str, entity_id: int, entity_name: str):
     """
     Adds an item to the blacklist or whitelist.

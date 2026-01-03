@@ -93,6 +93,16 @@ class Chromium(commands.AutoShardedBot):
             if shared_config.IS_RAILWAY:
                 log.network("Environment: Railway Detected.")
             
+            # Validate guild settings - restore any that were soft-deleted but bot is still in
+            try:
+                from database.queries import restore_settings_for_active_guilds
+                guild_ids = [g.id for g in self.guilds]
+                restored = await restore_settings_for_active_guilds(guild_ids)
+                if restored > 0:
+                    log.database(f"Restored settings for {restored} guild(s) with stale deleted_at flags.")
+            except Exception as e:
+                log.error("Failed to validate guild settings on startup", exc_info=e)
+            
             await self.change_presence(activity=discord.Activity(
                 type=discord.ActivityType.watching, 
                 name=f"over {len(self.guilds)} guilds | Shard {self.shard_id or 0}"
