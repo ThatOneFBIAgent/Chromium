@@ -27,6 +27,7 @@ class Chromium(commands.AutoShardedBot):
         intents.presences = True
         intents.emojis_and_stickers = True # Required for emoji updates
         intents.bans = True # Required for bans
+        intents.auto_moderation = True # Required for AutoMod
         
         super().__init__(
             command_prefix="cr!", # Fallback, we mainly use slash commands
@@ -105,13 +106,13 @@ class Chromium(commands.AutoShardedBot):
             
             await self.change_presence(activity=discord.Activity(
                 type=discord.ActivityType.watching, 
-                name=f"over {len(self.guilds)} guilds | Shard {self.shard_id or 0}"
+                name=f"over {len(self.guilds)} guilds | Shard {self.shard_id+1 or 1}"
             ))
             
             self._ready_once.set()
         else:
             # Shard resumed event — bot reconnected
-            log.network(f"[Shard {self.shard_id or '?'}] resumed session in {time.time() - self.start_time:.2f} seconds.")
+            log.network(f"[Shard {self.shard_id+1 or '?'}] resumed session in {time.time() - self.start_time:.2f} seconds.")
 
     async def close(self):
         # Note: Logic moved to graceful_shutdown primarily, this is just a super call wrapper now
@@ -122,20 +123,20 @@ bot = Chromium()
 
 @bot.event
 async def on_shard_connect(shard_id):
-    log.network(f"[Shard {shard_id}] connected successfully in {time.time() - bot.start_time:.2f} seconds.")
+    log.network(f"[Shard {shard_id+1}] connected successfully in {time.time() - bot.start_time:.2f} seconds.")
 
 @bot.event
 async def on_shard_ready(shard_id):
     guilds = [g for g in bot.guilds if g.shard_id == shard_id]
-    log.network(f"[Shard {shard_id}] ready - handling {len(guilds)} guild(s).")
+    log.network(f"[Shard {shard_id+1}] ready - handling {len(guilds)} guild(s).")
 
 @bot.event
 async def on_shard_disconnect(shard_id):
-    log.network(f"[Shard {shard_id}] disconnected - waiting for resume.")
+    log.network(f"[Shard {shard_id+1}] disconnected - waiting for resume.")
 
 @bot.event
 async def on_shard_resumed(shard_id):
-    log.network(f"[Shard {shard_id}] resumed connection.")
+    log.network(f"[Shard {shard_id+1}] resumed connection.")
 
 async def kill_all_tasks():
     current = asyncio.current_task()

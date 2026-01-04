@@ -9,8 +9,8 @@ from utils.embed_builder import EmbedBuilder
 MODULES = [
     "MessageDelete", "MessageEdit", "MemberJoin", "MemberLeave", 
     "VoiceState", "RoleUpdate", "ChannelUpdate", "ErrorLogger",
-    "MemberBan", "GuildUpdate", "EmojiUpdate", "RolePermissionUpdate", "MemberKick", "NicknameUpdate",
-    "TimeoutUpdate", "WebhookUpdate", "InviteUpdate"
+    "MemberBan", "GuildUpdate", "EmojiUpdate", "MemberKick", "NicknameUpdate",
+    "TimeoutUpdate", "WebhookUpdate", "InviteUpdate", "AutoModUpdate"
 ]
 
 class LogManagement(commands.Cog):

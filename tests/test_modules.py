@@ -3,6 +3,10 @@ import discord
 from unittest.mock import AsyncMock, MagicMock
 from logging_modules.member_join import MemberJoin
 from logging_modules.message_delete import MessageDelete
+from logging_modules.role_update import RoleUpdate
+from logging_modules.automod_update import AutoModUpdate
+from logging_modules.webhook_update import WebhookUpdate
+from logging_modules.voice_state import VoiceState
 
 @pytest.mark.asyncio
 async def test_member_join_logging(mocker, mock_guild, mock_user):
@@ -101,3 +105,313 @@ async def test_message_delete_blocked(mocker, mock_guild, mock_user, mock_channe
     await cog.on_message_delete(message)
     
     mock_log.assert_not_called()
+
+# Role Update Tests
+
+@pytest.mark.asyncio
+async def test_role_update_name_change(mocker, mock_guild):
+    """
+    Verify role update name change detection.
+    """
+    bot = MagicMock()
+    cog = RoleUpdate(bot)
+    
+    before_role = MagicMock(spec=discord.Role)
+    after_role = MagicMock(spec=discord.Role)
+    
+    before_role.name = "Old Name"
+    after_role.name = "New Name"
+    after_role.guild = mock_guild
+    after_role.mention = "@New Name"
+    
+    # Ensure other attributes match
+    before_role.color = after_role.color = discord.Color.blue()
+    before_role.icon = after_role.icon = None
+    before_role.hoist = after_role.hoist = False
+    before_role.mentionable = after_role.mentionable = True
+    before_role.permissions.value = after_role.permissions.value = 0
+    
+    mock_log = mocker.patch.object(cog, 'log_event', new_callable=AsyncMock)
+    
+    await cog.on_guild_role_update(before_role, after_role)
+    
+    mock_log.assert_called_once()
+    # Check if embed description contains changes
+    embed = mock_log.call_args[0][1] # Second arg is embed
+    assert "Old Name" in embed.description
+    assert "New Name" in embed.description
+    assert "suspicious" not in mock_log.call_args.kwargs or not mock_log.call_args.kwargs['suspicious']
+
+@pytest.mark.asyncio
+async def test_role_update_perms_change(mocker, mock_guild):
+    """
+    Verify role update permission change detection.
+    """
+    bot = MagicMock()
+    cog = RoleUpdate(bot)
+    
+    before_role = MagicMock(spec=discord.Role)
+    after_role = MagicMock(spec=discord.Role)
+    
+    # Identities
+    before_role.name = after_role.name = "Test Role"
+    after_role.guild = mock_guild
+    after_role.mention = "@Test Role"
+    
+    # Permissions setup - Need to iterate over them
+    # Mocking permission iterator
+    perms_list = [('view_channels', True), ('manage_messages', False)]
+    before_role.permissions = MagicMock()
+    before_role.permissions.__iter__.return_value = iter(perms_list)
+    before_role.permissions.value = 10
+    
+    after_role.permissions = MagicMock()
+    after_role.permissions.value = 20 # Changed
+    
+    # Simulate getattr for after.permissions
+    def get_perm(name):
+        if name == 'view_channels': return True
+        if name == 'manage_messages': return True # Changed from False to True
+        return False
+    
+    # We can't easily mock getattr on a Mock object in a loop unless we use specs or side_effect
+    # Simplified approach: The loop iterates 'before', and checks 'after'.
+    # We just need to make sure 'after.permissions.manage_messages' is different.
+    configure_perm_mock(after_role.permissions, {'view_channels': True, 'manage_messages': True})
+    
+    # Mock matching attribs
+    before_role.color = after_role.color
+    before_role.icon = after_role.icon
+    before_role.hoist = after_role.hoist
+    before_role.mentionable = after_role.mentionable
+    
+    mock_log = mocker.patch.object(cog, 'log_event', new_callable=AsyncMock)
+    
+    await cog.on_guild_role_update(before_role, after_role)
+    
+    mock_log.assert_called_once()
+    embed = mock_log.call_args[0][1]
+    assert "manage_messages: False -> True" in embed.description
+
+def configure_perm_mock(mock_perms, value_dict):
+    """Helper to allow getattr(mock_perms, 'name') to work"""
+    # Mocks usually return new mocks for attributes. We want specific values.
+    # We can use specs, or just assign them.
+    for k, v in value_dict.items():
+        setattr(mock_perms, k, v)
+
+@pytest.mark.asyncio
+async def test_role_no_change(mocker, mock_guild):
+    """
+    Verify no event is logged if nothing important changes.
+    """
+    bot = MagicMock()
+    cog = RoleUpdate(bot)
+    
+    before_role = MagicMock(spec=discord.Role)
+    after_role = MagicMock(spec=discord.Role)
+    
+    before_role.name = after_role.name = "Role"
+    before_role.color = after_role.color = discord.Color.red()
+    before_role.icon = after_role.icon = None
+    before_role.hoist = after_role.hoist = True
+    before_role.mentionable = after_role.mentionable = False
+    
+    before_role.permissions.value = after_role.permissions.value = 8
+    
+    mock_log = mocker.patch.object(cog, 'log_event', new_callable=AsyncMock)
+    
+    await cog.on_guild_role_update(before_role, after_role)
+    
+    mock_log.assert_not_called()
+
+@pytest.mark.asyncio
+async def test_role_member_update_added(mocker, mock_guild, mock_user):
+    """
+    Verify role assignment logging.
+    """
+    bot = MagicMock()
+    cog = RoleUpdate(bot)
+    
+    before_member = MagicMock(spec=discord.Member)
+    after_member = MagicMock(spec=discord.Member)
+    
+    before_member.guild = after_member.guild = mock_guild
+    after_member.mention = "@User"
+    after_member.id = 12345
+    
+    # Setup Roles
+    role1 = MagicMock(spec=discord.Role); role1.name = "Role1"; role1.mention = "@Role1"
+    role2 = MagicMock(spec=discord.Role); role2.name = "Role2"; role2.mention = "@Role2"
+    
+    before_member.roles = [role1]
+    after_member.roles = [role1, role2] # Added role2
+    
+    # Mock should_log
+    mocker.patch.object(cog, 'should_log', return_value=True)
+    
+    mock_log = mocker.patch.object(cog, 'log_event', new_callable=AsyncMock)
+    
+    await cog.on_member_update(before_member, after_member)
+    
+    mock_log.assert_called_once()
+    embed = mock_log.call_args[0][1]
+    assert "**Added:** @Role2" in embed.description
+    assert "**Removed:**" not in embed.description
+
+@pytest.mark.asyncio
+async def test_role_member_update_removed(mocker, mock_guild, mock_user):
+    """
+    Verify role removal logging.
+    """
+    bot = MagicMock()
+    cog = RoleUpdate(bot)
+    
+    before_member = MagicMock(spec=discord.Member)
+    after_member = MagicMock(spec=discord.Member)
+    
+    before_member.guild = after_member.guild = mock_guild
+    after_member.mention = "@User"
+    after_member.id = 12345
+    
+    role1 = MagicMock(spec=discord.Role); role1.name = "Role1"; role1.mention = "@Role1"
+    
+    before_member.roles = [role1]
+    after_member.roles = [] # Removed role1
+    
+    mocker.patch.object(cog, 'should_log', return_value=True)
+    mock_log = mocker.patch.object(cog, 'log_event', new_callable=AsyncMock)
+    
+    await cog.on_member_update(before_member, after_member)
+    
+    mock_log.assert_called_once()
+    embed = mock_log.call_args[0][1]
+    assert "**Removed:** @Role1" in embed.description
+
+@pytest.mark.asyncio
+async def test_automod_rule_create_logs(mocker, mock_guild):
+    """
+    Verify automod rule creation logging.
+    """
+    bot = MagicMock()
+    cog = AutoModUpdate(bot)
+
+    # Remove spec to avoid AttributeError if discord.AutoModerationRule is missing
+    rule = MagicMock() 
+    rule.guild = mock_guild
+    rule.name = "Block Bad Words"
+    rule.creator = MagicMock()
+    rule.creator.mention = "@Admin"
+    rule.trigger_type.name = "keyword"
+
+    mock_log = mocker.patch.object(cog, "log_event", new_callable=AsyncMock)
+
+    await cog.on_auto_moderation_rule_create(rule)
+
+    mock_log.assert_called_once()
+    embed = mock_log.call_args[0][1]
+
+    assert "Block Bad Words" in embed.description
+    assert "@Admin" in str(embed.fields)
+    assert "keyword" in str(embed.fields)
+
+@pytest.mark.asyncio
+async def test_automod_action_execution_logs(mocker, mock_guild):
+    """
+    Verify automod action execution logging.
+    """
+    bot = MagicMock()
+    cog = AutoModUpdate(bot)
+
+    user = MagicMock()
+    user.mention = "@User"
+    user.id = 123
+
+    channel = MagicMock()
+    channel.mention = "#chat"
+
+    bot.get_guild.return_value = mock_guild
+    mock_guild.get_member.return_value = user
+    mock_guild.get_channel.return_value = channel
+
+    # Remove spec
+    payload = MagicMock()
+    payload.guild_id = mock_guild.id
+    payload.user_id = user.id
+    payload.channel_id = 999
+    payload.rule_id = 456
+    payload.content = "bad word detected"
+    payload.matched_keyword = "bad word"
+    payload.rule_trigger_type.name = "keyword"
+
+    mocker.patch.object(cog, "should_log", return_value=True)
+    mock_log = mocker.patch.object(cog, "log_event", new_callable=AsyncMock)
+
+    await cog.on_auto_moderation_action_execution(payload)
+
+    mock_log.assert_called_once()
+    embed = mock_log.call_args[0][1]
+
+    assert "bad word" in embed.description
+    assert "@User" in embed.description
+    assert "#chat" in embed.description
+
+@pytest.mark.asyncio
+async def test_webhook_created_logs(mocker, mock_guild):
+    """
+    Verify webhook creation logging.
+    """
+    bot = MagicMock()
+    cog = WebhookUpdate(bot)
+
+    channel = MagicMock()
+    channel.guild = mock_guild
+    channel.mention = "#logs"
+
+    # Current WebhookUpdate is simple and just logs the channel update event
+    # We test that it logs the generic warning.
+    mock_log = mocker.patch.object(cog, "log_event", new_callable=AsyncMock)
+
+    await cog.on_webhooks_update(channel)
+
+    mock_log.assert_called_once()
+    embed = mock_log.call_args[0][1]
+
+    assert "Webhooks Updated" in embed.title
+    assert "#logs" in embed.description
+
+@pytest.mark.asyncio
+async def test_voice_join_logs(mocker, mock_guild):
+    """
+    Verify voice join logging.
+    """
+    bot = MagicMock()
+    cog = VoiceState(bot)
+
+    member = MagicMock()
+    member.bot = False
+    member.guild = mock_guild
+    member.mention = "@User"
+    member.id = 123
+
+    channel = MagicMock()
+    channel.mention = "#vc"
+
+    before = MagicMock()
+    before.channel = None
+    before.mute = before.deaf = False
+
+    after = MagicMock()
+    after.channel = channel
+    after.mute = after.deaf = False
+
+    mocker.patch.object(cog, "should_log", return_value=True)
+    mock_log = mocker.patch.object(cog, "log_event", new_callable=AsyncMock)
+
+    await cog.on_voice_state_update(member, before, after)
+
+    mock_log.assert_called_once()
+
+    embed = mock_log.call_args[0][1]
+    assert "joined" in embed.description.lower()
+    assert "#vc" in embed.description

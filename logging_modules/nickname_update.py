@@ -6,21 +6,19 @@ from utils.embed_builder import EmbedBuilder
 class NicknameUpdate(BaseLogger):
     @commands.Cog.listener()
     async def on_member_update(self, before: discord.Member, after: discord.Member):
-        # We want to track NICKNAME changes, which are reflected in display_name
-        # (display_name is nick if present, else name)
+        # We want to track NICKNAME changes, which are reflected in .nick not .display_name
+        if before.nick == after.nick:
+            return
         
         if not await self.should_log(before.guild, user=before):
             return    
         
-        if before.display_name == after.display_name:
-            return
-
-        embed = EmbedBuilder.info(
+        embed = EmbedBuilder.build(
             title="Nickname Changed",
             description=f"{after.mention} changed nickname.",
             fields=[
-                ("Before", before.display_name, True),
-                ("After", after.display_name, True)
+                ("Before", before.nick, True),
+                ("After", after.nick, True)
             ]
         )
 

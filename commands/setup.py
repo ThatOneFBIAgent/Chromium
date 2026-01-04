@@ -66,7 +66,7 @@ class Setup(commands.Cog):
             "ChannelUpdate": True, "ErrorLogger": True, "MemberBan": True,
             "GuildUpdate": True, "EmojiUpdate": True, "MemberKick": True,
             "NicknameUpdate": True, "TimeoutUpdate": True, "WebhookUpdate": True,
-            "InviteUpdate": True, "RolePermissionUpdate": True
+            "InviteUpdate": True, "RolePermissionUpdate": True, "AutoModUpdate": True
         }
         
         # In simple setup, everything goes to log_channel_id (legacy field used for fallback/server)
@@ -147,7 +147,7 @@ class Setup(commands.Cog):
                 "ChannelUpdate": True, "ErrorLogger": True, "MemberBan": True,
                 "GuildUpdate": True, "EmojiUpdate": True, "MemberKick": True,
                 "NicknameUpdate": True, "TimeoutUpdate": True, "WebhookUpdate": True,
-                "InviteUpdate": True, "RolePermissionUpdate": True
+                "InviteUpdate": True, "RolePermissionUpdate": True, "AutoModUpdate": True
             }
             
             await upsert_guild_settings(
