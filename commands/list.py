@@ -231,7 +231,7 @@ class List(commands.Cog):
     @app_commands.guild_only()
     @app_commands.checks.has_permissions(manage_guild=True)
     @app_commands.autocomplete(query=add_autocomplete)
-    @app_commands.checks.cooldown(1, 3, app_commands.BucketType.guild)
+    @app_commands.checks.cooldown(1, 3, key=lambda i: (i.guild_id, i.user.id))
     async def blacklist_add(self, interaction: discord.Interaction, query: str):
         await self._add_command(interaction, query, "blacklist")
 
@@ -239,14 +239,14 @@ class List(commands.Cog):
     @app_commands.guild_only()
     @app_commands.checks.has_permissions(manage_guild=True)
     @app_commands.autocomplete(query=remove_autocomplete)
-    @app_commands.checks.cooldown(1, 3, app_commands.BucketType.guild)
+    @app_commands.checks.cooldown(1, 3, key=lambda i: (i.guild_id, i.user.id))
     async def blacklist_remove(self, interaction: discord.Interaction, query: str):
         await self._remove_command(interaction, query, "blacklist")
 
     @blacklist.command(name="show", description="Show blacklist")
     @app_commands.guild_only()
     @app_commands.checks.has_permissions(manage_guild=True)
-    @app_commands.checks.cooldown(1, 3, app_commands.BucketType.guild)
+    @app_commands.checks.cooldown(1, 3, key=lambda i: (i.guild_id, i.user.id))
     async def blacklist_show(self, interaction: discord.Interaction, page: int = 1):
         await self._show_command(interaction, page, "blacklist")
 
@@ -254,7 +254,7 @@ class List(commands.Cog):
     @app_commands.guild_only()
     @app_commands.checks.has_permissions(manage_guild=True)
     @app_commands.autocomplete(query=add_autocomplete)
-    @app_commands.checks.cooldown(1, 3, app_commands.BucketType.guild)
+    @app_commands.checks.cooldown(1, 3, key=lambda i: (i.guild_id, i.user.id))
     async def whitelist_add(self, interaction: discord.Interaction, query: str):
         await self._add_command(interaction, query, "whitelist")
 
@@ -262,21 +262,21 @@ class List(commands.Cog):
     @app_commands.guild_only()
     @app_commands.checks.has_permissions(manage_guild=True)
     @app_commands.autocomplete(query=remove_autocomplete)
-    @app_commands.checks.cooldown(1, 3, app_commands.BucketType.guild)
+    @app_commands.checks.cooldown(1, 3, key=lambda i: (i.guild_id, i.user.id))
     async def whitelist_remove(self, interaction: discord.Interaction, query: str):
         await self._remove_command(interaction, query, "whitelist")
 
     @whitelist.command(name="show", description="Show whitelist")   
     @app_commands.guild_only()
     @app_commands.checks.has_permissions(manage_guild=True)
-    @app_commands.checks.cooldown(1, 3, app_commands.BucketType.guild)
+    @app_commands.checks.cooldown(1, 3, key=lambda i: (i.guild_id, i.user.id))
     async def whitelist_show(self, interaction: discord.Interaction, page: int = 1):
         await self._show_command(interaction, page, "whitelist")
 
     @list_name.command(name="help", description="Get help with the list commands")
     @app_commands.guild_only()
     @app_commands.checks.has_permissions(manage_guild=True)
-    @app_commands.checks.cooldown(1, 3, app_commands.BucketType.guild)
+    @app_commands.checks.cooldown(1, 3, key=lambda i: (i.guild_id, i.user.id))
     async def help_list(self, interaction: discord.Interaction):
         await interaction.response.send_message(
             embed=EmbedBuilder.info("List Commands", """
