@@ -35,7 +35,7 @@ class Setup(commands.Cog):
     @setup_group.command(name="simple", description="Use the current channel for all logs")
     @app_commands.guild_only()
     @app_commands.checks.has_permissions(administrator=True)
-    @app_commands.checks.cooldown(1, 30.0, key=lambda i: (i.guild_id, i.user.id))
+    @app_commands.checks.cooldown(1, 40, app_commands.BucketType.guild)
     async def simple_setup(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=False) 
         
@@ -87,6 +87,7 @@ class Setup(commands.Cog):
     @setup_group.command(name="complex", description="Create dedicated channels and categories")
     @app_commands.guild_only()
     @app_commands.checks.has_permissions(administrator=True)
+    @app_commands.checks.cooldown(1, 40, app_commands.BucketType.guild)
     async def complex_setup(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=False)
         guild = interaction.guild

@@ -16,6 +16,7 @@ class Export(commands.Cog):
     @app_commands.command(name="export", description="Export the last 50 logs")
     @app_commands.guild_only()
     @app_commands.checks.has_permissions(administrator=True)
+    @app_commands.checks.cooldown(1, 10, app_commands.BucketType.guild)
     async def export_logs(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
         

@@ -22,6 +22,7 @@ class LogManagement(commands.Cog):
     @log_group.command(name="list", description="List all modules and their status")
     @app_commands.guild_only()
     @app_commands.checks.has_permissions(manage_guild=True)
+    @app_commands.checks.cooldown(1, 6, app_commands.BucketType.guild)
     async def list_modules(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=False)
         log_id, msg_id, mem_id, susp_id, enabled_modules = await get_guild_settings(interaction.guild_id)
@@ -48,6 +49,7 @@ class LogManagement(commands.Cog):
     @log_group.command(name="enable", description="Enable a logging module")
     @app_commands.guild_only()
     @app_commands.checks.has_permissions(manage_guild=True)
+    @app_commands.checks.cooldown(1, 4, app_commands.BucketType.guild)
     async def enable_module(self, interaction: discord.Interaction, module: str):
         await interaction.response.defer()
         if module not in MODULES:
@@ -70,6 +72,7 @@ class LogManagement(commands.Cog):
     @log_group.command(name="disable", description="Disable a logging module")
     @app_commands.guild_only()
     @app_commands.checks.has_permissions(manage_guild=True)
+    @app_commands.checks.cooldown(1, 4, app_commands.BucketType.guild)
     async def disable_module(self, interaction: discord.Interaction, module: str):
         await interaction.response.defer()
         if module not in MODULES:
@@ -92,6 +95,7 @@ class LogManagement(commands.Cog):
     @log_group.command(name="channel", description="Move all logging to a new channel (Simple Setup only)")
     @app_commands.guild_only()
     @app_commands.checks.has_permissions(manage_guild=True)
+    @app_commands.checks.cooldown(1, 10, app_commands.BucketType.guild)
     async def change_log_channel(self, interaction: discord.Interaction, channel: discord.TextChannel):
         log_id, msg_id, mem_id, susp_id, enabled_modules = await get_guild_settings(interaction.guild_id)
         
