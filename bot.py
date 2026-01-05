@@ -108,7 +108,7 @@ class Chromium(commands.AutoShardedBot):
             await self.change_presence(activity=discord.Activity(
                 type=discord.ActivityType.watching, 
                 name=f"over {len(self.guilds)} guilds | Shard {self.shard_id+1 or 1}"
-            ))
+            ), status=discord.Status.online)
             
             self._ready_once.set()
         else:
