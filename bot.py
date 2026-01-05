@@ -24,10 +24,11 @@ class Chromium(commands.AutoShardedBot):
         intents.members = True
         intents.message_content = True
         intents.voice_states = True
-        intents.presences = True
+        intents.presences = True # May or may not remove due to being obsolete/not used
         intents.emojis_and_stickers = True # Required for emoji updates
         intents.bans = True # Required for bans
         intents.auto_moderation = True # Required for AutoMod
+        intents.guilds = True # Required for guild updates
         
         super().__init__(
             command_prefix="cr!", # Fallback, we mainly use slash commands

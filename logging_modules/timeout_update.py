@@ -10,11 +10,11 @@ class TimeoutUpdate(BaseLogger):
         if not await self.should_log(before.guild, user=before):
             return    
         
-        if before.communication_disabled_until == after.communication_disabled_until:
+        if before.timed_out_until == after.timed_out_until:
             return
 
-        if after.communication_disabled_until:
-            until = after.communication_disabled_until.strftime("%Y-%m-%d %H:%M:%S")
+        if after.timed_out_until:
+            until = discord.utils.format_dt(after.timed_out_until, style="F") # Formatted date
             title = "Member Timed Out"
             desc = f"{after.mention} was timed out until {until}"
         else:

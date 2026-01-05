@@ -2,6 +2,7 @@ import discord
 from discord.ext import commands
 from .base import BaseLogger
 from utils.embed_builder import EmbedBuilder
+from utils.suspicious import suspicious_detector
 
 class MemberBan(BaseLogger):
     @commands.Cog.listener()
@@ -21,17 +22,23 @@ class MemberBan(BaseLogger):
             footer=f"ID: {user.id}"
         )
         
+        executor = None
         # Enriched Audit Log Lookup
         try:
             async for entry in guild.audit_logs(limit=1, action=discord.AuditLogAction.ban):
                 if entry.target and entry.target.id == user.id:
                     embed.add_field(name="Reason", value=entry.reason or "No reason provided", inline=False)
                     embed.add_field(name="Banned By", value=entry.user.mention, inline=True)
+                    executor = entry.user
                     break
         except discord.Forbidden:
             pass # Missing permission to view audit logs
             
-        await self.log_event(guild, embed)
+        suspicious = False
+        if executor:
+            suspicious = suspicious_detector.check_member_ban(guild.id, executor.id)
+            
+        await self.log_event(guild, embed, suspicious=suspicious)
     
     @commands.Cog.listener()
     async def on_member_unban(self, guild: discord.Guild, user: discord.User):

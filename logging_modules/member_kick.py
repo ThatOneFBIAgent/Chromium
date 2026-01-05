@@ -2,6 +2,7 @@ import discord
 from discord.ext import commands
 from .base import BaseLogger
 from utils.embed_builder import EmbedBuilder
+from utils.suspicious import suspicious_detector
 import asyncio
 
 class MemberKick(BaseLogger):
@@ -26,7 +27,9 @@ class MemberKick(BaseLogger):
                             ("Reason", entry.reason or "No reason provided", False)
                         ]
                     )
-                    await self.log_event(member.guild, embed, suspicious=True)
+                    
+                    suspicious = suspicious_detector.check_member_kick(member.guild.id, entry.user.id)
+                    await self.log_event(member.guild, embed, suspicious=suspicious)
                     return
         except discord.Forbidden:
             pass

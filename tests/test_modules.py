@@ -1,5 +1,6 @@
 import pytest
 import discord
+import time
 from unittest.mock import AsyncMock, MagicMock
 from logging_modules.member_join import MemberJoin
 from logging_modules.message_delete import MessageDelete
@@ -7,6 +8,8 @@ from logging_modules.role_update import RoleUpdate
 from logging_modules.automod_update import AutoModUpdate
 from logging_modules.webhook_update import WebhookUpdate
 from logging_modules.voice_state import VoiceState
+from utils.suspicious import suspicious_detector
+from collections import deque
 
 @pytest.mark.asyncio
 async def test_member_join_logging(mocker, mock_guild, mock_user):
@@ -358,27 +361,35 @@ async def test_automod_action_execution_logs(mocker, mock_guild):
 
 @pytest.mark.asyncio
 async def test_webhook_created_logs(mocker, mock_guild):
-    """
-    Verify webhook creation logging.
-    """
     bot = MagicMock()
     cog = WebhookUpdate(bot)
 
     channel = MagicMock()
+    channel.id = 123
     channel.guild = mock_guild
     channel.mention = "#logs"
 
-    # Current WebhookUpdate is simple and just logs the channel update event
-    # We test that it logs the generic warning.
+    # Pretend there was nothing before
+    cog._webhook_cache = {}
+
+    fake_webhook = MagicMock()
+    fake_webhook.id = 999
+    fake_webhook.name = "sus-hook"
+    fake_webhook.channel_id = channel.id
+
+    # Now Discord "returns" one webhook
+    channel.webhooks = AsyncMock(return_value=[fake_webhook])
+
     mock_log = mocker.patch.object(cog, "log_event", new_callable=AsyncMock)
 
     await cog.on_webhooks_update(channel)
 
     mock_log.assert_called_once()
-    embed = mock_log.call_args[0][1]
 
-    assert "Webhooks Updated" in embed.title
-    assert "#logs" in embed.description
+    embed = mock_log.call_args[0][1]
+    assert "Webhooks changed" in embed.title
+    assert "#logs" in embed.title
+    assert "sus-hook" in embed.description
 
 @pytest.mark.asyncio
 async def test_voice_join_logs(mocker, mock_guild):
@@ -415,3 +426,74 @@ async def test_voice_join_logs(mocker, mock_guild):
     embed = mock_log.call_args[0][1]
     assert "joined" in embed.description.lower()
     assert "#vc" in embed.description
+
+# Suspicious Detector Tests
+
+def test_suspicious_logic():
+    # Test basic is_spam
+    timestamps = deque()
+    # Fill with 3 items now
+    now = time.time()
+    for _ in range(3):
+        timestamps.append(now)
+    
+    # Threshold 4, window 10 -> False
+    assert not suspicious_detector.is_spam(timestamps, 4, 10.0)
+
+    # Add 4th -> True
+    timestamps.append(now)
+    assert suspicious_detector.is_spam(timestamps, 4, 10.0)
+    
+    # Test prune
+    timestamps.clear()
+    timestamps.append(now - 20) # Old
+    timestamps.append(now) # New
+    
+    suspicious_detector.prune(timestamps, 10.0) # Window 10
+    assert len(timestamps) == 1
+    assert timestamps[0] == now
+
+def test_check_ban_heuristic():
+    guild_id = 123
+    user_id = 999
+    
+    # Clear existing
+    if guild_id in suspicious_detector.trackers:
+        del suspicious_detector.trackers[guild_id]
+        
+    # Add 3 bans
+    for _ in range(3):
+        assert not suspicious_detector.check_member_ban(guild_id, user_id)
+        
+    # 4th ban -> suspicious
+    assert suspicious_detector.check_member_ban(guild_id, user_id)
+
+def test_check_kick_heuristic():
+    guild_id = 123
+    user_id = 888
+    
+    if guild_id in suspicious_detector.trackers:
+        del suspicious_detector.trackers[guild_id]
+        
+    for _ in range(3):
+        assert not suspicious_detector.check_member_kick(guild_id, user_id)
+        
+    assert suspicious_detector.check_member_kick(guild_id, user_id)
+
+def test_cleanup_expired():
+    guild_id = 456
+    user_id = 777
+    
+    # Add activity
+    suspicious_detector.check_member_kick(guild_id, user_id)
+    assert guild_id in suspicious_detector.trackers
+    
+    # Force timestamps to be old
+    tracker = suspicious_detector.trackers[guild_id][user_id]
+    tracker.kicks.clear()
+    tracker.kicks.append(time.time() - 10000)
+    
+    suspicious_detector.cleanup_expired(max_age_seconds=100)
+    
+    # Should be gone
+    assert user_id not in suspicious_detector.trackers.get(guild_id, {})
