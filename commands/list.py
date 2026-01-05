@@ -228,34 +228,48 @@ class List(commands.Cog):
 
     # Register commands
     @blacklist.command(name="add", description="Add a user, role, or channel to blacklist")
+    @app_commands.guild_only()
+    @app_commands.checks.has_permissions(manage_guild=True)
     @app_commands.autocomplete(query=add_autocomplete)
     async def blacklist_add(self, interaction: discord.Interaction, query: str):
         await self._add_command(interaction, query, "blacklist")
 
     @blacklist.command(name="remove", description="Remove an item from blacklist")
+    @app_commands.guild_only()
+    @app_commands.checks.has_permissions(manage_guild=True)
     @app_commands.autocomplete(query=remove_autocomplete)
     async def blacklist_remove(self, interaction: discord.Interaction, query: str):
         await self._remove_command(interaction, query, "blacklist")
 
     @blacklist.command(name="show", description="Show blacklist")
+    @app_commands.guild_only()
+    @app_commands.checks.has_permissions(manage_guild=True)
     async def blacklist_show(self, interaction: discord.Interaction, page: int = 1):
         await self._show_command(interaction, page, "blacklist")
 
     @whitelist.command(name="add", description="Add a user, role, or channel to whitelist")
+    @app_commands.guild_only()
+    @app_commands.checks.has_permissions(manage_guild=True)
     @app_commands.autocomplete(query=add_autocomplete)
     async def whitelist_add(self, interaction: discord.Interaction, query: str):
         await self._add_command(interaction, query, "whitelist")
 
     @whitelist.command(name="remove", description="Remove an item from whitelist")
+    @app_commands.guild_only()
+    @app_commands.checks.has_permissions(manage_guild=True)
     @app_commands.autocomplete(query=remove_autocomplete)
     async def whitelist_remove(self, interaction: discord.Interaction, query: str):
         await self._remove_command(interaction, query, "whitelist")
 
-    @whitelist.command(name="show", description="Show whitelist")
+    @whitelist.command(name="show", description="Show whitelist")   
+    @app_commands.guild_only()
+    @app_commands.checks.has_permissions(manage_guild=True)
     async def whitelist_show(self, interaction: discord.Interaction, page: int = 1):
         await self._show_command(interaction, page, "whitelist")
 
     @list_name.command(name="help", description="Get help with the list commands")
+    @app_commands.guild_only()
+    @app_commands.checks.has_permissions(manage_guild=True)
     async def help_list(self, interaction: discord.Interaction):
         await interaction.response.send_message(
             embed=EmbedBuilder.info("List Commands", """

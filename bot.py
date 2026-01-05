@@ -146,6 +146,26 @@ async def kill_all_tasks():
         task.cancel()
     await asyncio.sleep(1)
 
+# permission check fails go here
+@bot.event
+async def on_app_command_error(interaction: discord.Interaction, error: Exception):
+    from discord.app_commands import (
+        CheckFailure,
+        MissingPermissions,
+    )
+    if isinstance(error, MissingPermissions):
+        await _safe_response(interaction, "You do not have permission to use this command.", ephemeral=True)
+    elif isinstance(error, CheckFailure):
+        await _safe_response(interaction, "You do not have permission to use this command.", ephemeral=True)
+    else:
+        await _safe_response(interaction, f"An error occurred while processing this command: {error}", ephemeral=True)
+
+async def _safe_response(interaction, message, ephemeral=False):
+    try:
+        await interaction.response.send_message(message, ephemeral=ephemeral)
+    except discord.InteractionResponded:
+        await interaction.followup.send(message, ephemeral=ephemeral)
+
 async def graceful_shutdown():
     log.info("Shutdown signal received - performing cleanup...")
     bot._is_shutting_down = True
