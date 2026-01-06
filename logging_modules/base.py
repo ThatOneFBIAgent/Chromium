@@ -93,7 +93,13 @@ class BaseLogger(commands.Cog):
         return True
 
     async def get_log_channel(self, guild: discord.Guild) -> Optional[discord.TextChannel]:
-        log_id, msg_id, mem_id, susp_id, enabled_modules = await get_guild_settings(guild.id)
+        # Unpack
+        res = await get_guild_settings(guild.id)
+        if not res or not res[0]:
+             return None
+        
+        log_id, msg_id, mem_id = res[0], res[1], res[2]
+        enabled_modules = res[6]
         
         if not enabled_modules.get(self.module_name, False):
             return None
@@ -123,42 +129,72 @@ class BaseLogger(commands.Cog):
 
     async def log_event(self, guild: discord.Guild, embed: discord.Embed, suspicious: bool = False):
         try:
-            log_id, msg_id, mem_id, susp_id, enabled_modules = await get_guild_settings(guild.id)
+            res = await get_guild_settings(guild.id)
+            if not res or not res[0]: # Need at least log_id
+                return
+
+            log_id, msg_id, mem_id = res[0], res[1], res[2]
+            log_wh, msg_wh, mem_wh = res[3], res[4], res[5]
+            enabled_modules = res[6]
             
             if not enabled_modules.get(self.module_name, False):
                 return
 
             target_id = log_id
+            target_wh = log_wh
+            
+            log.trace(f"[{self.module_name}] Initial target_id={target_id}, target_wh={target_wh}")
             
             # Module Category Routing
             if self.module_name in ["MessageDelete", "MessageEdit"]:
                 if msg_id: target_id = msg_id
+                if msg_wh: target_wh = msg_wh
             elif self.module_name in ["MemberJoin", "MemberLeave", "MemberBan", "VoiceState", "NicknameUpdate", "MemberKick"]:
                 if mem_id: target_id = mem_id
+                if mem_wh: target_wh = mem_wh
 
             if suspicious:
-                # Force to server logs for visibility, or susp_id if configured
-                target_id = susp_id if susp_id else log_id
-                
+                # Apply suspicious formatting
                 embed.color = discord.Color.dark_red()
                 embed.title = f"⚠️ Suspicious Activity: {embed.title}"
-
-            if not target_id:
-                return
-
-            channel = guild.get_channel(target_id)
+                # by default this already routes to "server-logs" channel if the above checks fails
+                
+            sent_via_webhook = False
             
-            # Fallback Logic: If specific channel is missing, try main log_id
-            if not channel and target_id != log_id and log_id:
-                channel = guild.get_channel(log_id)
+            # Try Webhook First
+            if target_wh:
+                try:
+                    log.trace(f"[{self.module_name}] Sending via webhook: {target_wh}")
+                    webhook = discord.Webhook.from_url(target_wh, session=self.bot.http_session, client=self.bot)
+                    await webhook.send(embed=embed)
+                    sent_via_webhook = True
+                    log.trace(f"[{self.module_name}] Webhook send successful")
+                except (discord.NotFound, discord.InvalidArgument):
+                    log.warning(f"[{self.module_name}] Webhook URL is invalid or not found: {target_wh}")
+                    pass
+                except Exception as e:
+                    log.error(f"Failed to send log via webhook for {self.module_name}: {e}")
+
+            if sent_via_webhook:
+                # Skip channel sending if webhook worked
+                pass
+            else:
+                if not target_id:
+                    return
+
+                channel = guild.get_channel(target_id)
+                
+                # Fallback Logic: If specific channel is missing, try main log_id
+                if not channel and target_id != log_id and log_id:
+                    channel = guild.get_channel(log_id)
+                    if channel:
+                        if embed.footer and embed.footer.text:
+                            embed.set_footer(text=f"{embed.footer.text} | Note: Original channel missing. Run /setup to fix.")
+                        else:
+                            embed.set_footer(text="Note: Original channel missing. Run /setup to fix.")
+                
                 if channel:
-                    if embed.footer and embed.footer.text:
-                        embed.set_footer(text=f"{embed.footer.text} | Note: Original channel missing. Run /setup to fix.")
-                    else:
-                        embed.set_footer(text="Note: Original channel missing. Run /setup to fix.")
-            
-            if channel:
-                await channel.send(embed=embed)
+                    await channel.send(embed=embed)
 
             # DB Persist
             content = f"{embed.title}: {embed.description}"

@@ -12,7 +12,9 @@ async def upsert_guild_settings(
     log_channel_id: Optional[int] = None, 
     message_log_id: Optional[int] = None,
     member_log_id: Optional[int] = None,
-    susp_channel_id: Optional[int] = None, 
+    log_webhook_url: Optional[str] = None,
+    message_webhook_url: Optional[str] = None,
+    member_webhook_url: Optional[str] = None,
     enabled_modules: Optional[Dict[str, bool]] = None
 ):
     """
@@ -23,7 +25,7 @@ async def upsert_guild_settings(
 
     try:
         cursor = await db.connection.execute(
-            "SELECT enabled_modules, log_channel_id, message_log_id, member_log_id, suspicious_channel_id FROM guild_settings WHERE guild_id = ?", 
+            "SELECT enabled_modules, log_channel_id, message_log_id, member_log_id, log_webhook_url, message_webhook_url, member_webhook_url FROM guild_settings WHERE guild_id = ?", 
             (guild_id,)
         )
         row = await cursor.fetchone()
@@ -33,19 +35,23 @@ async def upsert_guild_settings(
         current_log = None
         current_msg_log = None
         current_mem_log = None
-        current_susp = None
         
         if row:
             current_modules = json.loads(row[0]) if row[0] else {}
             current_log = row[1]
             current_msg_log = row[2]
             current_mem_log = row[3]
-            current_susp = row[4]
+            current_log_wh = row[4]
+            current_msg_wh = row[5]
+            current_mem_wh = row[6]
             
         final_log = log_channel_id if log_channel_id is not None else current_log
         final_msg_log = message_log_id if message_log_id is not None else current_msg_log
         final_mem_log = member_log_id if member_log_id is not None else current_mem_log
-        final_susp = susp_channel_id if susp_channel_id is not None else current_susp
+        
+        final_log_wh = log_webhook_url if log_webhook_url is not None else current_log_wh
+        final_msg_wh = message_webhook_url if message_webhook_url is not None else current_msg_wh
+        final_mem_wh = member_webhook_url if member_webhook_url is not None else current_mem_wh
         
         if enabled_modules:
             current_modules.update(enabled_modules)
@@ -59,41 +65,43 @@ async def upsert_guild_settings(
         # To be safe, I'll use standard UPSERT.
         
         await db.connection.execute("""
-            INSERT INTO guild_settings (guild_id, log_channel_id, message_log_id, member_log_id, suspicious_channel_id, enabled_modules)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO guild_settings (guild_id, log_channel_id, message_log_id, member_log_id, log_webhook_url, message_webhook_url, member_webhook_url, enabled_modules)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(guild_id) DO UPDATE SET
                 log_channel_id = excluded.log_channel_id,
                 message_log_id = excluded.message_log_id,
                 member_log_id = excluded.member_log_id,
-                suspicious_channel_id = excluded.suspicious_channel_id,
+                log_webhook_url = excluded.log_webhook_url,
+                message_webhook_url = excluded.message_webhook_url,
+                member_webhook_url = excluded.member_webhook_url,
                 enabled_modules = excluded.enabled_modules
-        """, (guild_id, final_log, final_msg_log, final_mem_log, final_susp, final_modules_json))
+        """, (guild_id, final_log, final_msg_log, final_mem_log, final_log_wh, final_msg_wh, final_mem_wh, final_modules_json))
         await db.connection.commit()
     except Exception as e:
         log.error(f"Failed to upsert settings for guild {guild_id}", exc_info=e)
 
 async def get_guild_settings(guild_id: int):
     """
-    Returns (log_channel_id, message_log_id, member_log_id, suspicious_channel_id, enabled_modules_dict)
+    Returns (log_channel_id, message_log_id, member_log_id, log_webhook_url, message_webhook_url, member_webhook_url, enabled_modules_dict)
     """
     if not db.connection:
-        return None, None, None, None, {}
+        return None, None, None, None, None, None, {}
         
     try:
         cursor = await db.connection.execute(
-            "SELECT log_channel_id, message_log_id, member_log_id, suspicious_channel_id, enabled_modules, deleted_at FROM guild_settings WHERE guild_id = ?", 
+            "SELECT log_channel_id, message_log_id, member_log_id, log_webhook_url, message_webhook_url, member_webhook_url, enabled_modules, deleted_at FROM guild_settings WHERE guild_id = ?", 
             (guild_id,)
         )
         row = await cursor.fetchone()
         if row:
-             # row[5] is deleted_at. If set, return defaults (effectively "not configured" for the logger)
-            if row[5]:
-                return None, None, None, None, {}
-            return row[0], row[1], row[2], row[3], json.loads(row[4]) if row[4] else {}
-        return None, None, None, None, {}
+             # row[7] is deleted_at. If set, return defaults
+            if row[7]:
+                return None, None, None, None, None, None, {}
+            return row[0], row[1], row[2], row[3], row[4], row[5], json.loads(row[6]) if row[6] else {}
+        return None, None, None, None, None, None, {}
     except Exception as e:
         log.error(f"Failed to fetch settings for guild {guild_id}", exc_info=e)
-        return None, None, None, None, {}
+        return None, None, None, None, None, None, {}
 
 async def add_log(guild_id: int, module_name: str, content: str):
     if not db.connection:

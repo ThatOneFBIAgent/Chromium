@@ -25,14 +25,17 @@ class LogManagement(commands.Cog):
     @app_commands.checks.cooldown(1, 40, key=lambda i: (i.guild_id, i.user.id))
     async def list_modules(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=False)
-        log_id, msg_id, mem_id, susp_id, enabled_modules = await get_guild_settings(interaction.guild_id)
-        
-        # Check configuration
-        if not log_id and not msg_id and not mem_id:
-            await interaction.followup.send(
+        # Unpack all 9 values
+        res = await get_guild_settings(interaction.guild_id)
+        if not res or not res[0]: # Check if log_id is set
+             await interaction.followup.send(
                 embed=EmbedBuilder.error("Not Configured", "This server does not have Chromium configured! Run `/setup` first.")
             )
-            return
+             return
+             
+        # Extract enabled_modules (last item in 7-value tuple)
+        enabled_modules = res[6] 
+
 
         status_text = ""
         for module in MODULES:
@@ -97,7 +100,8 @@ class LogManagement(commands.Cog):
     @app_commands.checks.has_permissions(manage_guild=True)
     @app_commands.checks.cooldown(1, 10, key=lambda i: (i.guild_id, i.user.id))
     async def change_log_channel(self, interaction: discord.Interaction, channel: discord.TextChannel):
-        log_id, msg_id, mem_id, susp_id, enabled_modules = await get_guild_settings(interaction.guild_id)
+        res = await get_guild_settings(interaction.guild_id)
+        log_id = res[0]
         
         # Check if configured
         if not log_id:
@@ -113,7 +117,7 @@ class LogManagement(commands.Cog):
         # If they are different, it implies a complex setup (or manual tinkering).
         
         # Helper to get unique non-None IDs
-        ids = {x for x in [log_id, msg_id, mem_id] if x is not None}
+        ids = {x for x in res[0:3] if x is not None} # log_id, msg_id, mem_id
         
         is_simple = len(ids) == 1
         
@@ -129,13 +133,29 @@ class LogManagement(commands.Cog):
             )
             return
             
+        # Create Webhook for the new channel to maintain webhook functionality
+        webhook_url = None
+        try:
+             # Prepare Avatar
+            avatar_bytes = None
+            if self.bot.user.display_avatar:
+                avatar_bytes = await self.bot.user.display_avatar.read()
+                
+            webhook = await channel.create_webhook(name=self.bot.user.name, avatar=avatar_bytes)
+            webhook_url = webhook.url
+        except Exception:
+            # If webhook creation fails, we just won't update the URL fields
+            pass
+
         # Update All to New Channel
         await upsert_guild_settings(
-            interaction.guild_id,
+            guild_id=interaction.guild_id,
             log_channel_id=channel.id,
             message_log_id=channel.id,
             member_log_id=channel.id,
-            susp_channel_id=channel.id # Also move suspicious logs for simple setup
+            log_webhook_url=webhook_url,
+            message_webhook_url=webhook_url,
+            member_webhook_url=webhook_url
         )
         
         await interaction.response.send_message(

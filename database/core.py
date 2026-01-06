@@ -76,7 +76,9 @@ class DatabaseManager:
                 log_channel_id INTEGER, -- General/Server logs
                 message_log_id INTEGER, -- Message logs
                 member_log_id INTEGER, -- Member/User logs
-                suspicious_channel_id INTEGER, -- Optional override
+                log_webhook_url TEXT, -- Webhook for general logs
+                message_webhook_url TEXT, -- Webhook for message logs
+                member_webhook_url TEXT, -- Webhook for member logs
                 enabled_modules TEXT DEFAULT '{}', -- JSON string
                 deleted_at DATETIME DEFAULT NULL -- Soft delete timestamp
             );
@@ -115,6 +117,17 @@ class DatabaseManager:
         try:
             for q in queries:
                 await self.connection.execute(q)
+            
+            # Migration for added columns
+            cursor = await self.connection.execute("PRAGMA table_info(guild_settings)")
+            columns = [row[1] for row in await cursor.fetchall()]
+            
+            if 'log_webhook_url' not in columns:
+                log.database("Migrating guild_settings table to include webhook columns...")
+                await self.connection.execute("ALTER TABLE guild_settings ADD COLUMN log_webhook_url TEXT")
+                await self.connection.execute("ALTER TABLE guild_settings ADD COLUMN message_webhook_url TEXT")
+                await self.connection.execute("ALTER TABLE guild_settings ADD COLUMN member_webhook_url TEXT")
+            
             await self.connection.commit()
             log.database("Database schema initialization complete.")
         except Exception as e:

@@ -11,6 +11,7 @@ import signal
 import asyncio
 import time
 import contextlib
+import aiohttp
 from config import shared_config
 from database.core import db
 from utils.logger import get_logger
@@ -44,6 +45,9 @@ class Chromium(commands.AutoShardedBot):
         """
         Async setup hook to initialize DB and load extensions.
         """
+        # Start shared http session early so it's available for extensions
+        self.http_session = aiohttp.ClientSession()
+        
         # Initialize Database
         await asyncio.sleep(5) # Give network some time to settle
         # Attempt to restore from Drive if available
@@ -175,6 +179,10 @@ async def graceful_shutdown():
 
     # Close DB
     await db.close()
+    
+    # Close shared http session
+    if bot.http_session and not bot.http_session.closed:
+        await bot.http_session.close()
 
     # Close bot
     await kill_all_tasks()

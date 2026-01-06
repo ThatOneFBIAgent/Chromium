@@ -22,7 +22,8 @@ class Export(commands.Cog):
         
         # Check Configuration First
         from database.queries import get_guild_settings
-        log_id, _, _, _, _ = await get_guild_settings(interaction.guild_id)
+        res = await get_guild_settings(interaction.guild_id)
+        log_id = res[0]
         
         if not log_id:
              await interaction.followup.send(

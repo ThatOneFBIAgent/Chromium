@@ -69,12 +69,29 @@ class Setup(commands.Cog):
             "InviteUpdate": True, "RolePermissionUpdate": True, "AutoModUpdate": True
         }
         
+        # Prepare Avatar for Webhooks
+        avatar_bytes = None
+        try:
+            if self.bot.user.display_avatar:
+                avatar_bytes = await self.bot.user.display_avatar.read()
+        except Exception:
+            pass # Fallback to no avatar
+            
+        # Create Webhook
+        try:
+            webhook = await interaction.channel.create_webhook(name=self.bot.user.name, avatar=avatar_bytes)
+        except Exception as e:
+            return await msg.edit(content=f"Setup Failed: Could not create webhook. {str(e)}")
+
         # In simple setup, everything goes to log_channel_id (legacy field used for fallback/server)
         await upsert_guild_settings(
-            interaction.guild_id, 
+            guild_id=interaction.guild_id, 
             log_channel_id=interaction.channel_id,
             message_log_id=interaction.channel_id,
             member_log_id=interaction.channel_id,
+            log_webhook_url=webhook.url,
+            message_webhook_url=webhook.url,
+            member_webhook_url=webhook.url,
             enabled_modules=default_modules
         )
         
@@ -151,12 +168,43 @@ class Setup(commands.Cog):
                 "InviteUpdate": True, "RolePermissionUpdate": True, "AutoModUpdate": True
             }
             
+            # Prepare Avatar
+            avatar_bytes = None
+            try:
+                if self.bot.user.display_avatar:
+                    avatar_bytes = await self.bot.user.display_avatar.read()
+            except Exception:
+                pass
+            
+            # Helper to create or get webhook
+            async def get_or_create_webhook(channel):
+                bot_id = self.bot.user.id
+                try:
+                    for wh in await channel.webhooks():
+                        if wh.user and wh.user.id == bot_id:
+                            return wh
+
+                except Exception as e:
+                    raise e
+                
+                try:
+                    return await channel.create_webhook(name=self.bot.user.name, avatar=avatar_bytes)
+                except Exception as e:
+                    return None
+
+            # Create Webhooks
+            server_wh = await get_or_create_webhook(server_logs)
+            message_wh = await get_or_create_webhook(message_logs)
+            member_wh = await get_or_create_webhook(member_logs)
+            
             await upsert_guild_settings(
-                guild.id, 
+                guild_id=guild.id, 
                 log_channel_id=server_logs.id,
                 message_log_id=message_logs.id,
                 member_log_id=member_logs.id,
-                susp_channel_id=server_logs.id,
+                log_webhook_url=server_wh.url if server_wh else None,
+                message_webhook_url=message_wh.url if message_wh else None,
+                member_webhook_url=member_wh.url if member_wh else None,
                 enabled_modules=default_modules
             )
             

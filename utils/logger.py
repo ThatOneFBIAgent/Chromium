@@ -3,7 +3,7 @@ import sys
 import os
 import inspect
 from datetime import datetime
-from config import shared_config
+from config import shared_config, Environment
 
 # custom log levels
 SUCCESS_LEVEL = 25
@@ -106,7 +106,7 @@ def get_logger(name=None) -> logging.Logger:
             name = "Chromium"
 
     logger = logging.getLogger(name)
-    logger.setLevel(logging.TRACE_LEVEL if shared_config.ENVIRONMENT == "development" else logging.EVENT_LEVEL)
+    logger.setLevel(logging.TRACE_LEVEL if shared_config.ENVIRONMENT == Environment.DEVELOPMENT else logging.EVENT_LEVEL)
     
     # Check if handler exists to avoid duplicates
     if not logger.handlers:
@@ -117,6 +117,11 @@ def get_logger(name=None) -> logging.Logger:
     return logger
 
 # Add convenience methods to Logger class
+def trace(self, message, *args, **kwargs):
+    if self.isEnabledFor(TRACE_LEVEL):
+        kwargs.setdefault('stacklevel', 2)
+        self._log(TRACE_LEVEL, message, args, **kwargs)
+
 def success(self, message, *args, **kwargs):
     if self.isEnabledFor(SUCCESS_LEVEL):
         kwargs.setdefault('stacklevel', 2)
@@ -143,6 +148,7 @@ def discord_log(self, message, *args, **kwargs):
         self._log(DISCORD_LEVEL, message, args, **kwargs)
 
 # Wire up methods
+logging.Logger.trace = trace
 logging.Logger.success = success
 logging.Logger.event = event
 logging.Logger.database = database
