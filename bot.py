@@ -48,6 +48,10 @@ class Chromium(commands.AutoShardedBot):
         # Start shared http session early so it's available for extensions
         self.http_session = aiohttp.ClientSession()
         
+        # Initialize event queue for rate-limited API calls
+        from utils.rate_limiter import init_event_queue
+        self.event_queue = init_event_queue(self)
+        
         # Initialize Database
         await asyncio.sleep(5) # Give network some time to settle
         # Attempt to restore from Drive if available
@@ -179,6 +183,10 @@ async def graceful_shutdown():
 
     # Close DB
     await db.close()
+    
+    # Stop event queue processing
+    if hasattr(bot, 'event_queue') and bot.event_queue:
+        bot.event_queue.stop_processing()
     
     # Close shared http session
     if bot.http_session and not bot.http_session.closed:

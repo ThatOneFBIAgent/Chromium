@@ -4,6 +4,7 @@ from discord.ext import commands
 from database.queries import upsert_guild_settings
 from utils.embed_builder import EmbedBuilder
 from utils.views import ConfirmationView
+from utils.permissions import check_bot_permissions, format_missing_permissions, get_modules_to_disable
 import discord.utils
 
 class Setup(commands.Cog):
@@ -39,11 +40,24 @@ class Setup(commands.Cog):
     async def simple_setup(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=False) 
         
+        # Check bot permissions BEFORE showing confirmation
+        missing_perms = check_bot_permissions(interaction.guild)
+        modules_to_disable = get_modules_to_disable(missing_perms)
+        
+        # Build confirmation message with permission warnings
+        description = f"This will configure **{interaction.channel.mention}** as the log channel for ALL modules.\nExisting settings will be overwritten."
+        
+        if missing_perms:
+            description += "\n\n⚠️ **Permission Issues Detected:**\n"
+            description += f"The following modules will be **disabled** due to missing permissions:\n"
+            description += format_missing_permissions(missing_perms)
+            description += "\n\n*Grant the missing permissions and run `/setup` again to enable these modules.*"
+        
         # Confirmation Stage
         view = ConfirmationView(timeout=180.0, author_id=interaction.user.id)
         embed = EmbedBuilder.warning(
             title="Confirm Simple Setup",
-            description=f"This will configure **{interaction.channel.mention}** as the log channel for ALL modules.\nExisting settings will be overwritten.",
+            description=description,
             footer="You have 3 minutes to confirm."
         )
         msg = await interaction.followup.send(embed=embed, view=view)
@@ -68,6 +82,9 @@ class Setup(commands.Cog):
             "NicknameUpdate": True, "TimeoutUpdate": True, "WebhookUpdate": True,
             "InviteUpdate": True, "RolePermissionUpdate": True, "AutoModUpdate": True
         }
+        
+        # Disable modules with missing permissions
+        default_modules.update(modules_to_disable)
         
         # Prepare Avatar for Webhooks
         avatar_bytes = None
@@ -109,11 +126,24 @@ class Setup(commands.Cog):
         await interaction.response.defer(ephemeral=False)
         guild = interaction.guild
         
+        # Check bot permissions BEFORE showing confirmation
+        missing_perms = check_bot_permissions(guild)
+        modules_to_disable = get_modules_to_disable(missing_perms)
+        
+        # Build confirmation message with permission warnings
+        description = "This will create a 'ChromiumLogs' category and 3 channels (server-logs, message-logs, member-logs).\nExisting settings will be overwritten."
+        
+        if missing_perms:
+            description += "\n\n⚠️ **Permission Issues Detected:**\n"
+            description += f"The following modules will be **disabled** due to missing permissions:\n"
+            description += format_missing_permissions(missing_perms)
+            description += "\n\n*Grant the missing permissions and run `/setup` again to enable these modules.*"
+        
         # Confirmation Stage
         view = ConfirmationView(timeout=180.0, author_id=interaction.user.id)
         embed = EmbedBuilder.warning(
             title="Confirm Complex Setup",
-            description="This will create a 'ChromiumLogs' category and 3 channels (server-logs, message-logs, member-logs).\nExisting settings will be overwritten.",
+            description=description,
             footer="You have 3 minutes to confirm."
         )
         msg = await interaction.followup.send(embed=embed, view=view)
@@ -167,6 +197,9 @@ class Setup(commands.Cog):
                 "NicknameUpdate": True, "TimeoutUpdate": True, "WebhookUpdate": True,
                 "InviteUpdate": True, "RolePermissionUpdate": True, "AutoModUpdate": True
             }
+            
+            # Disable modules with missing permissions
+            default_modules.update(modules_to_disable)
             
             # Prepare Avatar
             avatar_bytes = None

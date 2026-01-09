@@ -13,7 +13,6 @@ class MemberLeave(BaseLogger):
         
         description = f"{member.mention} {member.name} has left the server."
         
-        # TODO: truncate to 20 roles or 3000 characters otherwise we get 403's lmao
         roles = [r.mention for r in member.roles if r.name != "@everyone"]
         roles = ", ".join(roles)
         

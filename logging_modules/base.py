@@ -6,6 +6,7 @@ from database.queries import get_guild_settings, add_log, get_all_list_items
 from utils.embed_builder import EmbedBuilder
 from utils.logger import get_logger
 from utils.suspicious import suspicious_detector
+from utils.rate_limiter import send_with_backoff
 
 log = get_logger()
 
@@ -142,66 +143,105 @@ class BaseLogger(commands.Cog):
 
             target_id = log_id
             target_wh = log_wh
+            fallback_id = None  # For complex setup, server-logs as fallback
             
             log.trace(f"[{self.module_name}] Initial target_id={target_id}, target_wh={target_wh}")
             
             # Module Category Routing
             if self.module_name in ["MessageDelete", "MessageEdit"]:
-                if msg_id: target_id = msg_id
+                if msg_id: 
+                    target_id = msg_id
+                    fallback_id = log_id  # server-logs is fallback
                 if msg_wh: target_wh = msg_wh
             elif self.module_name in ["MemberJoin", "MemberLeave", "MemberBan", "VoiceState", "NicknameUpdate", "MemberKick"]:
-                if mem_id: target_id = mem_id
+                if mem_id: 
+                    target_id = mem_id
+                    fallback_id = log_id  # server-logs is fallback
                 if mem_wh: target_wh = mem_wh
 
             if suspicious:
                 # Apply suspicious formatting
                 embed.color = discord.Color.dark_red()
                 embed.title = f"⚠️ Suspicious Activity: {embed.title}"
-                # by default this already routes to "server-logs" channel if the above checks fails
                 
-            sent_via_webhook = False
+            sent_successfully = False
+            webhook_failed = False
             
-            # Try Webhook First
+            # Try Webhook First (with exponential backoff)
             if target_wh:
-                try:
-                    log.trace(f"[{self.module_name}] Sending via webhook: {target_wh}")
-                    webhook = discord.Webhook.from_url(target_wh, session=self.bot.http_session, client=self.bot)
-                    await webhook.send(embed=embed)
-                    sent_via_webhook = True
+                success, err = await send_with_backoff(
+                    lambda: discord.Webhook.from_url(
+                        target_wh, session=self.bot.http_session, client=self.bot
+                    ).send(embed=embed)
+                )
+                
+                if success:
+                    sent_successfully = True
                     log.trace(f"[{self.module_name}] Webhook send successful")
-                except (discord.NotFound, discord.InvalidArgument):
-                    log.warning(f"[{self.module_name}] Webhook URL is invalid or not found: {target_wh}")
-                    pass
-                except Exception as e:
-                    log.error(f"Failed to send log via webhook for {self.module_name}: {e}")
+                elif err and isinstance(err, discord.NotFound):
+                    # Webhook is dead
+                    log.warning(f"[{self.module_name}] Webhook deleted or invalid, falling back")
+                    webhook_failed = True
+                elif err:
+                    log.error(f"[{self.module_name}] Webhook send failed: {err}")
+                    webhook_failed = True
 
-            if sent_via_webhook:
-                # Skip channel sending if webhook worked
-                pass
-            else:
-                if not target_id:
-                    return
-
-                channel = guild.get_channel(target_id)
-                
-                # Fallback Logic: If specific channel is missing, try main log_id
-                if not channel and target_id != log_id and log_id:
-                    channel = guild.get_channel(log_id)
-                    if channel:
-                        if embed.footer and embed.footer.text:
-                            embed.set_footer(text=f"{embed.footer.text} | Note: Original channel missing. Run /setup to fix.")
-                        else:
-                            embed.set_footer(text="Note: Original channel missing. Run /setup to fix.")
-                
+            # Fallback when primary webhook fails
+            if not sent_successfully and webhook_failed:
+                # Step 1: Send error message via bot to the target channel
+                channel = guild.get_channel(target_id) if target_id else None
                 if channel:
-                    await channel.send(embed=embed)
+                    warning_embed = EmbedBuilder.warning(
+                        "⚠️ Webhook Unavailable",
+                        "The logging webhook was deleted or is invalid.\n"
+                        "Attempting to use server-logs webhook as fallback.\n\n"
+                        "**Fix:** Run `/setup` to reconfigure webhooks."
+                    )
+                    await send_with_backoff(lambda: channel.send(embed=warning_embed))
+                
+                # Step 2: Try server-logs webhook (log_wh) as fallback
+                if log_wh and log_wh != target_wh:
+                    # Append fallback note to footer
+                    if embed.footer and embed.footer.text:
+                        embed.set_footer(text=f"{embed.footer.text} | Fallback: via server-logs webhook")
+                    else:
+                        embed.set_footer(text="Fallback: via server-logs webhook")
+                    
+                    success, err = await send_with_backoff(
+                        lambda: discord.Webhook.from_url(
+                            log_wh, session=self.bot.http_session, client=self.bot
+                        ).send(embed=embed)
+                    )
+                    
+                    if success:
+                        sent_successfully = True
+                        log.trace(f"[{self.module_name}] Fallback to server-logs webhook successful")
+                    else:
+                        log.warning(f"[{self.module_name}] Server-logs webhook also failed: {err}")
+                
+                # Step 3: Last resort - send via bot to server-logs channel
+                if not sent_successfully and fallback_id and fallback_id != target_id:
+                    fallback_channel = guild.get_channel(fallback_id)
+                    if fallback_channel:
+                        if embed.footer and embed.footer.text and "Fallback" not in embed.footer.text:
+                            embed.set_footer(text=f"{embed.footer.text} | Fallback: direct send (webhooks unavailable)")
+                        elif not embed.footer or not embed.footer.text:
+                            embed.set_footer(text="Fallback: direct send (webhooks unavailable)")
+                        
+                        success, err = await send_with_backoff(lambda: fallback_channel.send(embed=embed))
+                        if success:
+                            sent_successfully = True
+                        else:
+                            log.error(f"[{self.module_name}] All fallback methods failed: {err}")
 
-            # DB Persist
-            content = f"{embed.title}: {embed.description}"
-            if embed.fields:
-                content += " | " + " | ".join([f"{f.name}: {f.value}" for f in embed.fields])
-            
-            await add_log(guild.id, self.module_name, content)
+            # DB Persist (only if we successfully sent)
+            if sent_successfully:
+                content = f"{embed.title}: {embed.description}"
+                if embed.fields:
+                    content += " | " + " | ".join([f"{f.name}: {f.value}" for f in embed.fields])
+                
+                await add_log(guild.id, self.module_name, content)
+                
         except discord.errors.Forbidden:
             log.error(f"Forbidden to send log in {guild.name}, bot may have been kicked")
         except Exception as e:

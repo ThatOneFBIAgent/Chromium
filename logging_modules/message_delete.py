@@ -74,19 +74,21 @@ class MessageDelete(BaseLogger):
 
         description = f"**{count} messages were bulk deleted in {channel.mention}**"
         
+        isbot = " | Bot" if executor.is_bot else ""
+
         embed = EmbedBuilder.error(
             title="Bulk Message Delete",
             description=description,
-            footer=f"Channel ID: {channel.id}",
+            footer=f"Channel ID: {channel.id}{isbot}",
             fields=[]
         )
         
         if executor:
             embed.add_field(name="Purged By", value=executor.mention, inline=True)
         if reason:
-             embed.add_field(name="Reason", value=reason, inline=True)
+            embed.add_field(name="Reason", value=reason, inline=True)
             
-        # TODO: Save deleted contents (or what we can scrape) to a text file 
+        # There was a todo here but due to limitations (and my inability to do shit right) it will not be implemented
         
         await self.log_event(guild, embed)
 

@@ -58,11 +58,9 @@ async def upsert_guild_settings(
             
         final_modules_json = json.dumps(current_modules)
         
-        # We need to handle schema changes gracefully if the table was already created without new columns.
-        # But assuming we can drop/recreate or alter. For this exercise, I'll rely on the CREATE IF NOT EXISTS logic in core.py
-        # triggering only on fresh start or I'd need migration logic.
-        # Since I can't easily migrate here without a migration script, I'll assume fresh DB or user deletes it.
-        # To be safe, I'll use standard UPSERT.
+    # NOTE: IF YOU CHANGE THE COLUMNS IN guild_settings, YOU MUST CHANGE THE ON CONFLICT(guild_id) DO UPDATE SET
+    #       AND THE VALUES IN THE INSERT INTO guild_settings (guild_id, log_channel_id, message_log_id, member_log_id, log_webhook_url, message_webhook_url, member_webhook_url, enabled_modules)
+    #       OTHERWISE YOU WILL GET A SQL ERROR OR STALE DATA
         
         await db.connection.execute("""
             INSERT INTO guild_settings (guild_id, log_channel_id, message_log_id, member_log_id, log_webhook_url, message_webhook_url, member_webhook_url, enabled_modules)

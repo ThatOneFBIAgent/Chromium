@@ -88,8 +88,8 @@ class GuildEvents(commands.Cog):
                     break
         
         if not target_channel:
-             log.discord(f"Could not find channel to send restoration prompt in {guild.name}")
-             return
+            log.discord(f"Could not find channel to send restoration prompt in {guild.name}")
+            return
 
         view = RestorationView(guild.id)
         embed = EmbedBuilder.info(
