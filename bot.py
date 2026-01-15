@@ -104,15 +104,11 @@ class Chromium(commands.AutoShardedBot):
             
             # Validate guild settings - restore any that were soft-deleted but bot is still in
             try:
-                from database.queries import restore_settings_for_active_guilds, migrate_remove_automod_flag
+                from database.queries import restore_settings_for_active_guilds
                 guild_ids = [g.id for g in self.guilds]
                 restored = await restore_settings_for_active_guilds(guild_ids)
                 if restored > 0:
                     log.database(f"Restored settings for {restored} guild(s) with stale deleted_at flags.")
-                    
-                # DB Migration: Remove AutoModUpdate flag
-                await migrate_remove_automod_flag()
-                
             except Exception as e:
                 log.error("Failed to validate guild settings on startup", exc_info=e)
             
