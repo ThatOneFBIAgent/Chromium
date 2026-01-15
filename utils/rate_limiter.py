@@ -106,16 +106,37 @@ class EventQueue:
         while not backoff.attempts_exhausted:
             try:
                 return await self._try_send(event)
+            except discord.RateLimited as e:
+                # 429 - TRUST THE RETRY_AFTER
+                # Add a small buffer (0.1s) to be safe
+                delay = e.retry_after + 0.1
+                log.warning(f"[Queue] Rate limited (bucket: {e.bucket}), retry after {delay:.2f}s")
+                await asyncio.sleep(delay)
+                # Do NOT consume an attempt count for forced rate limits, just wait
+                # But to prevent infinite loops, we might assume the backoff limiter handles it if we used it,
+                # here we just sleep and continue loop.
+                continue
+                
             except discord.HTTPException as e:
-                if e.status == 429:  # Rate limited
+                if e.status == 429: # Should be caught by RateLimited but just in case
                     delay = backoff.get_delay()
-                    log.warning(f"[Queue] Rate limited, backing off for {delay:.1f}s")
+                    log.warning(f"[Queue] HTTP 429, backing off for {delay:.1f}s")
                     await asyncio.sleep(delay)
-                elif e.status in (403, 404):  # Forbidden or Not Found
-                    log.warning(f"[Queue] Channel/webhook unavailable (HTTP {e.status})")
+                    
+                elif e.status in (408, 500, 502, 503, 504): # Retriable Server Errors
+                    delay = backoff.get_delay()
+                    log.warning(f"[Queue] Server error {e.status}, backing off for {delay:.1f}s")
+                    await asyncio.sleep(delay)
+                    
+                elif e.status in (401, 403, 404, 410): # Fatal Errors
+                    log.warning(f"[Queue] Fatal error {e.status} (Forbidden/Not Found/Gone). Stopping.")
+                    # If it was a webhook, mark as failed
+                    if event.webhook_url:
+                        self._failed_webhooks.add(event.webhook_url)
                     return False
+                    
                 else:
-                    log.error(f"[Queue] HTTP error {e.status}: {e.text}")
+                    log.error(f"[Queue] Unexpected HTTP error {e.status}: {e.text}")
                     return False
             except Exception as e:
                 log.error(f"[Queue] Unexpected error sending event: {e}")
@@ -123,7 +144,7 @@ class EventQueue:
         
         log.error(f"[Queue] Exhausted retries for guild {event.guild_id}")
         return False
-    
+
     async def _try_send(self, event: QueuedEvent) -> bool:
         """Attempt to send via webhook or channel."""
         # Try webhook first if available and not known to be failed
@@ -184,14 +205,35 @@ async def send_with_backoff(
         try:
             await coro_factory()
             return True, None
+            
+        except discord.RateLimited as e:
+            # Handle explicit rate limit exception
+            delay = e.retry_after + 0.1
+            log.warning(f"[Backoff] Rate limited, waiting {delay:.2f}s")
+            await asyncio.sleep(delay)
+            # Reset backoff attempt if we want to be generous, or just continue
+            continue
+            
         except discord.HTTPException as e:
             last_error = e
+            
             if e.status == 429:
                 delay = backoff.get_delay()
-                log.warning(f"[Backoff] Rate limited, waiting {delay:.1f}s")
+                log.warning(f"[Backoff] HTTP 429, waiting {delay:.1f}s")
                 await asyncio.sleep(delay)
+                
+            elif e.status in (408, 500, 502, 503, 504):
+                delay = backoff.get_delay()
+                log.warning(f"[Backoff] HTTP {e.status}, waiting {delay:.1f}s")
+                await asyncio.sleep(delay)
+                
+            elif e.status in (401, 403, 404, 410):
+                log.warning(f"[Backoff] Fatal HTTP {e.status}, aborting.")
+                return False, e
+                
             else:
                 return False, e
+                
         except Exception as e:
             return False, e
     

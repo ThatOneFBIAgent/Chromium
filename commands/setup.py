@@ -80,7 +80,7 @@ class Setup(commands.Cog):
             "ChannelUpdate": True, "ErrorLogger": True, "MemberBan": True,
             "GuildUpdate": True, "EmojiUpdate": True, "MemberKick": True,
             "NicknameUpdate": True, "TimeoutUpdate": True, "WebhookUpdate": True,
-            "InviteUpdate": True, "RolePermissionUpdate": True, "AutoModUpdate": True
+            "InviteUpdate": True, "RolePermissionUpdate": True
         }
         
         # Disable modules with missing permissions
@@ -195,7 +195,7 @@ class Setup(commands.Cog):
                 "ChannelUpdate": True, "ErrorLogger": True, "MemberBan": True,
                 "GuildUpdate": True, "EmojiUpdate": True, "MemberKick": True,
                 "NicknameUpdate": True, "TimeoutUpdate": True, "WebhookUpdate": True,
-                "InviteUpdate": True, "RolePermissionUpdate": True, "AutoModUpdate": True
+                "InviteUpdate": True, "RolePermissionUpdate": True
             }
             
             # Disable modules with missing permissions

@@ -15,6 +15,14 @@ class RestorationView(discord.ui.View):
     @discord.ui.button(label="Restore Settings", style=discord.ButtonStyle.green, emoji="♻️")
     async def restore_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer()
+        if interaction.user.id != interaction.guild.owner_id:
+            embed = EmbedBuilder.error(
+                "Unauthorized",
+                "Only the guild owner can perform this action."
+            )
+            await interaction.followup.send(embed=embed)
+            return
+
         await restore_guild_settings(self.guild_id)
         
         embed = EmbedBuilder.success(
@@ -34,6 +42,14 @@ class RestorationView(discord.ui.View):
     @discord.ui.button(label="Start Fresh", style=discord.ButtonStyle.red, emoji="🆕")
     async def fresh_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer()
+        if interaction.user.id != interaction.guild.owner_id:
+            embed = EmbedBuilder.error(
+                "Unauthorized",
+                "Only the guild owner can perform this action."
+            )
+            await interaction.followup.send(embed=embed)
+            return
+
         await hard_delete_guild_settings(self.guild_id)
         
         embed = EmbedBuilder.info(

@@ -40,6 +40,10 @@ class BackupService(commands.Cog):
         await asyncio.sleep(7200)
 
     async def perform_backup(self):
+        if shared_config.ENVIRONMENT == Environment.DEVELOPMENT:
+            log.warning("Backup service is disabled in development environment.")
+            return
+        
         log.info("Starting automated database backup...")
         try:
             # Fixed filename for rotation (overwrite strategy)

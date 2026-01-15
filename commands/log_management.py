@@ -11,7 +11,7 @@ MODULES = [
     "MessageDelete", "MessageEdit", "MemberJoin", "MemberLeave", 
     "VoiceState", "RoleUpdate", "ChannelUpdate", "ErrorLogger",
     "MemberBan", "GuildUpdate", "EmojiUpdate", "MemberKick", "NicknameUpdate",
-    "TimeoutUpdate", "WebhookUpdate", "InviteUpdate", "AutoModUpdate"
+    "TimeoutUpdate", "WebhookUpdate", "InviteUpdate"
 ]
 
 # Module information for /log info command
@@ -54,7 +54,7 @@ MODULE_INFO = {
     "ErrorLogger": {
         "description": "Logs command errors and sends user-friendly error messages.",
         "events": ["on_command_error", "on_app_command_error"],
-        "channel": "N/A"
+        "channel": "N/A (typically server-logs)"
     },
     "MemberBan": {
         "description": "Logs when members are banned or unbanned, with executor from audit log.",
@@ -94,11 +94,6 @@ MODULE_INFO = {
     "InviteUpdate": {
         "description": "Logs invite creation and deletion.",
         "events": ["on_invite_create", "on_invite_delete"],
-        "channel": "server-logs"
-    },
-    "AutoModUpdate": {
-        "description": "Logs AutoMod rule changes and action executions.",
-        "events": ["on_auto_moderation_rule_create", "on_auto_moderation_rule_delete", "on_auto_moderation_action_execution"],
         "channel": "server-logs"
     }
 }

@@ -37,7 +37,11 @@ Key features include per-guild isolated logging, suspicion heuristics, database 
 
 ### Local Run
 
-1. **Clone the repository**
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/ThatOneFBIAgent/Chromium.git
+   ```
+
 2. **Install dependencies**:
    ```bash
    pip install -r requirements.txt
@@ -46,10 +50,13 @@ Key features include per-guild isolated logging, suspicion heuristics, database 
    Copy `.env.example` to `.env` and fill in your details.
    ```env
    DISCORD_TOKEN=your_token
+   BETA_TOKEN=your_token
    DRIVE_CREDS_B64=base64_encoded_service_account_json (Optional)
    DRIVE_FOLDER_ID=your_folder_id (Optional)
    ```
-   ###### Technically it's meant to be an OAuth2 token, in json form. Despite it saying "service account" in the name. And detection of which is not very reliable. But switching to using a service account auth is possible but not recommended due to quota limits and etc.
+   > [!IMPORTANT]
+   > Both BETA_TOKEN and DISCORD_TOKEN **MUST** be the same due to how the code detects the right token to use. Or only use BETA_TOKEN if you don't plan on deploying
+
 4. **Run the bot**:
    ```bash
    python bot.py
@@ -73,7 +80,7 @@ Key features include per-guild isolated logging, suspicion heuristics, database 
    *Note: volume mapping `./data` is critical for ensuring logs and the database persist across restarts.*
 
 ### Railway
-1.R **Deploy from github**
+1. **Deploy from github**
    Make sure it's uploaded a public or private repo, and that railway has access to it (by logging in with Github).
    Deploying should be as easy as adding the ENV variables and making sure `RAILPACK` is set.
 
@@ -127,5 +134,17 @@ This project is licensed under the GNUv3 License - see the [LICENSE](LICENSE) fi
 
 If you have any questions, encounter bugs, or need help with setup:
 
-- **Issues**: Open a ticket on our [GitHub Issues](https://github.com/yourusername/chromium/issues) page.
+- **Issues**: Open a ticket on our [GitHub Issues](https://github.com/ThatOneFBIAgent/chromium/issues) page.
 - **Discord**: Contact `_izacarlos` directly for support.
+
+---
+
+## Disclaimer / No Liability
+
+**Important**: This codebase is provided "as is", without warranty of any kind. 
+
+1.  **"as is"**: This bot is built on a caffeine-powered codebase by an AuDHD programmer. While I strive for excellence, quirks and edge cases may exist, but I will try to fix them in due time.
+2.  **Data Reliability**: Internally, I try not to lose logs, but I cannot promise a 100% guarantee. Do not rely on this bot as your single source of truth for critical auditing or legal compliance when it comes to reporting.
+3.  **Logs & Exports**: Exported logs are provided for convenience. I am not liable for any data loss, corruption, or misuse of the logging data once it leaves the bot's internal systems.
+4.  **Usage**: You are installing/adding a bot built by a third party. I am not liable if something goes wrong, sideways, or upside down in your server configuration or data as a result of using this software. Use responsibly.
+5.  **Data collection**: No data is shared with third parties, and any data stored is only used for running the bot and it's per-server configurations. I cannot see your logs, and I cannot access your data unless explicitly shared with me. The backups created every two hours are created/updated to my personal Drive account and do not contain sensitive data. (Nor that I care about it, it does not benefit me)

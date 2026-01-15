@@ -5,7 +5,6 @@ from unittest.mock import AsyncMock, MagicMock
 from logging_modules.member_join import MemberJoin
 from logging_modules.message_delete import MessageDelete
 from logging_modules.role_update import RoleUpdate
-from logging_modules.automod_update import AutoModUpdate
 from logging_modules.webhook_update import WebhookUpdate
 from logging_modules.voice_state import VoiceState
 from utils.suspicious import suspicious_detector
@@ -290,74 +289,6 @@ async def test_role_member_update_removed(mocker, mock_guild, mock_user):
     mock_log.assert_called_once()
     embed = mock_log.call_args[0][1]
     assert "**Removed:** @Role1" in embed.description
-
-@pytest.mark.asyncio
-async def test_automod_rule_create_logs(mocker, mock_guild):
-    """
-    Verify automod rule creation logging.
-    """
-    bot = MagicMock()
-    cog = AutoModUpdate(bot)
-
-    # Remove spec to avoid AttributeError if discord.AutoModerationRule is missing
-    rule = MagicMock() 
-    rule.guild = mock_guild
-    rule.name = "Block Bad Words"
-    rule.creator = MagicMock()
-    rule.creator.mention = "@Admin"
-    rule.trigger_type.name = "keyword"
-
-    mock_log = mocker.patch.object(cog, "log_event", new_callable=AsyncMock)
-
-    await cog.on_auto_moderation_rule_create(rule)
-
-    mock_log.assert_called_once()
-    embed = mock_log.call_args[0][1]
-
-    assert "Block Bad Words" in embed.description
-    assert "@Admin" in str(embed.fields)
-    assert "keyword" in str(embed.fields)
-
-@pytest.mark.asyncio
-async def test_automod_action_execution_logs(mocker, mock_guild):
-    """
-    Verify automod action execution logging.
-    """
-    bot = MagicMock()
-    cog = AutoModUpdate(bot)
-
-    user = MagicMock()
-    user.mention = "@User"
-    user.id = 123
-
-    channel = MagicMock()
-    channel.mention = "#chat"
-
-    bot.get_guild.return_value = mock_guild
-    mock_guild.get_member.return_value = user
-    mock_guild.get_channel.return_value = channel
-
-    # Remove spec
-    payload = MagicMock()
-    payload.guild_id = mock_guild.id
-    payload.user_id = user.id
-    payload.channel_id = 999
-    payload.rule_id = 456
-    payload.content = "bad word detected"
-    payload.matched_keyword = "bad word"
-    payload.rule_trigger_type.name = "keyword"
-
-    mocker.patch.object(cog, "should_log", return_value=True)
-    mock_log = mocker.patch.object(cog, "log_event", new_callable=AsyncMock)
-
-    await cog.on_auto_moderation_action_execution(payload)
-
-    mock_log.assert_called_once()
-    embed = mock_log.call_args[0][1]
-
-    assert "bad word" in embed.description
-    assert "@User" in embed.description
-    assert "#chat" in embed.description
 
 @pytest.mark.asyncio
 async def test_webhook_created_logs(mocker, mock_guild):

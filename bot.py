@@ -28,7 +28,6 @@ class Chromium(commands.AutoShardedBot):
         intents.presences = True # May or may not remove due to being obsolete/not used
         intents.emojis_and_stickers = True # Required for emoji updates
         intents.bans = True # Required for bans
-        intents.auto_moderation = True # Required for AutoMod
         intents.guilds = True # Required for guild updates
         
         super().__init__(
@@ -105,18 +104,19 @@ class Chromium(commands.AutoShardedBot):
             
             # Validate guild settings - restore any that were soft-deleted but bot is still in
             try:
-                from database.queries import restore_settings_for_active_guilds
+                from database.queries import restore_settings_for_active_guilds, migrate_remove_automod_flag
                 guild_ids = [g.id for g in self.guilds]
                 restored = await restore_settings_for_active_guilds(guild_ids)
                 if restored > 0:
                     log.database(f"Restored settings for {restored} guild(s) with stale deleted_at flags.")
+                    
+                # DB Migration: Remove AutoModUpdate flag
+                await migrate_remove_automod_flag()
+                
             except Exception as e:
                 log.error("Failed to validate guild settings on startup", exc_info=e)
             
-            await self.change_presence(activity=discord.Activity(
-                type=discord.ActivityType.watching, 
-                name=f"over {len(self.guilds)} guilds | Shard {self.shard_id+1 or 1}"
-            ), status=discord.Status.online)
+            # Global status set removed in favor of per-shard status in on_shard_ready
             
             self._ready_once.set()
         else:
@@ -138,6 +138,15 @@ async def on_shard_connect(shard_id):
 async def on_shard_ready(shard_id):
     guilds = [g for g in bot.guilds if g.shard_id == shard_id]
     log.network(f"[Shard {shard_id+1}] ready - handling {len(guilds)} guild(s).")
+    
+    # Set per-shard presence
+    total_shards = bot.shard_count or 1
+    activity = discord.Activity(
+        type=discord.ActivityType.watching, 
+        name=f"over {len(guilds)} guilds | Shard {shard_id+1}/{total_shards}"
+    )
+    # Ensure we set it for this specific shard
+    await bot.change_presence(activity=activity, shard_id=shard_id)
 
 @bot.event
 async def on_shard_disconnect(shard_id):
@@ -161,25 +170,29 @@ async def graceful_shutdown():
     # Let ongoing tasks wrap up (simple sleep)
     await asyncio.sleep(1)
 
-    try:
-        if os.path.exists(db.db_path):
-             log.info("Uploading database backup...")
-             
-             # Read file content
-             with open(db.db_path, 'rb') as f:
-                db_content = f.read()
+    if not shared_config.ENVIRONMENT == "production":
+        log.info("Not running on production, skipping database backup.")
+        return
+    else:
+        try:
+            if os.path.exists(db.db_path):
+                log.info("Uploading database backup...")
 
-             backup_name = "chromium_database_backup.sqlite"
-             existing_id = await asyncio.to_thread(drive_manager.find_file, backup_name)
-             
-             if existing_id:
-                 await asyncio.to_thread(drive_manager.update_file, existing_id, db_content)
-             else:
-                 await asyncio.to_thread(drive_manager.upload_file, backup_name, db_content)
-                 
-             log.info("Database backup completed.")
-    except Exception as e:
-        log.error("Failed to perform final database backup", exc_info=e)
+                # Read file content
+                with open(db.db_path, 'rb') as f:
+                    db_content = f.read()
+
+                backup_name = "chromium_database_backup.sqlite"
+                existing_id = await asyncio.to_thread(drive_manager.find_file, backup_name)
+
+                if existing_id:
+                    await asyncio.to_thread(drive_manager.update_file, existing_id, db_content)
+                else:
+                    await asyncio.to_thread(drive_manager.upload_file, backup_name, db_content)
+
+                log.info("Database backup completed.")
+        except Exception as e:
+            log.error("Failed to perform final database backup", exc_info=e)
 
     # Close DB
     await db.close()
@@ -263,5 +276,6 @@ if __name__ == "__main__":
     except Exception as e:
         # We need a fallback logger here if log isn't defined, but it is global
         # im not gonna be nesting try clauses nuh uh
+        # please ignore the comment above i was not aware of the guard clauses technique - sincerely Iza
         log.error("Fatal crash in main", exc_info=e)
         sys.exit(1)

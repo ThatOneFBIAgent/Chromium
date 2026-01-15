@@ -23,7 +23,7 @@ MODULE_PERMISSIONS: Dict[str, List[str]] = {
     "WebhookUpdate": ["manage_webhooks"],
     "InviteUpdate": ["manage_guild"],
     "RolePermissionUpdate": ["view_audit_log"],
-    "AutoModUpdate": ["view_audit_log"],
+    "RolePermissionUpdate": ["view_audit_log"],
 }
 
 # Human-readable permission names for display

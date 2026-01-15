@@ -15,7 +15,7 @@ class Environment(str, Enum):
 
 class Config:
     def __init__(self):
-        self.DISCORD_TOKEN = self._get_required("DISCORD_TOKEN") # i really need a way to differiantiate between beta and prod tokens
+        self.DISCORD_TOKEN = self._get_required("BETA_TOKEN")
         self.GUI_TEST_MODE = os.getenv("GUI_TEST_MODE", "false").lower() == "true"
         self.ENVIRONMENT = Environment(os.getenv("ENVIRONMENT", "development"))
         

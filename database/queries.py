@@ -319,3 +319,53 @@ async def get_all_list_items(guild_id: int):
     except Exception as e:
         log.error(f"Failed to fetch all list items for guild {guild_id}", exc_info=e)
         return []
+
+async def migrate_remove_automod_flag() -> int:
+    """
+    Migration: Removes 'AutoModUpdate' from enabled_modules in all guilds.
+    Idempotent: Only updates rows that actually contain the flag.
+    Returns the number of guilds migrated.
+    """
+    if not db.connection:
+        log.warning("Database not connected, skipping migration check.")
+        return 0
+
+    count = 0
+    try:
+        # Fetch all guilds that might have settings
+        cursor = await db.connection.execute("SELECT guild_id, enabled_modules FROM guild_settings")
+        rows = await cursor.fetchall()
+        
+        for row in rows:
+            guild_id, raw_json = row[0], row[1]
+            if not raw_json:
+                continue
+                
+            try:
+                modules = json.loads(raw_json)
+            except json.JSONDecodeError:
+                continue
+                
+            # Check if key exists
+            if "AutoModUpdate" in modules:
+                # Remove it
+                del modules["AutoModUpdate"]
+                
+                # Update DB
+                new_json = json.dumps(modules)
+                await db.connection.execute(
+                    "UPDATE guild_settings SET enabled_modules = ? WHERE guild_id = ?",
+                    (new_json, guild_id)
+                )
+                count += 1
+        
+        if count > 0:
+            await db.connection.commit()
+            log.database(f"Migration: Removed AutoModUpdate flag from {count} guild(s).")
+        else:
+            log.database("Migration: No guilds required AutoModUpdate cleanup.")
+            
+    except Exception as e:
+        log.error("Migration failed: remove_automod_flag", exc_info=e)
+        
+    return count
