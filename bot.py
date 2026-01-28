@@ -153,17 +153,40 @@ async def kill_all_tasks():
         task.cancel()
     await asyncio.sleep(1)
 
+
+async def update_status():
+    try:
+        total_shards = bot.shard_count or 1
+        # Shard iteration       
+        for shard_id in range(total_shards):
+            # Calculate guild count for this shard 
+            # (approximation if we don't have exact list per shard easily, but bot.guilds has shard_id attr)
+            shard_guilds = [g for g in bot.guilds if g.shard_id == shard_id]
+            
+            activity = discord.Activity(
+                type=discord.ActivityType.watching, 
+                name=f"over {len(shard_guilds)} guilds | Shard {shard_id+1}/{total_shards}"
+            )
+            await bot.change_presence(activity=activity, shard_id=shard_id)
+    except Exception as e:
+        log.error("Failed to update status", exc_info=e)
+        # non-fatal, just log and continue
+        pass
+
 async def activity_watchdog():
     while not bot._is_shutting_down:
-        # repeat for update every 60 minutes
-        await asyncio.sleep(3600)
-        # Set per-shard presence
-        total_shards = bot.shard_count or 1
-        activity = discord.Activity(
-            type=discord.ActivityType.watching, 
-            name=f"over {len(bot.guilds)} guilds | Shard {bot.shard_id+1}/{total_shards}"
-        )
-        await bot.change_presence(status=discord.Status.online, activity=activity)
+        await update_status()
+        await asyncio.sleep(1800) # 30 minutes
+
+@bot.event
+async def on_guild_join(guild):
+    log.network(f"Joined guild: {guild.name} ({guild.id})")
+    await update_status()
+
+@bot.event
+async def on_guild_remove(guild):
+    log.network(f"Left guild: {guild.name} ({guild.id})")
+    await update_status()
 
 async def graceful_shutdown():
     log.info("Shutdown signal received - performing cleanup...")
