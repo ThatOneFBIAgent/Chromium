@@ -113,6 +113,9 @@ class Chromium(commands.AutoShardedBot):
                 log.error("Failed to validate guild settings on startup", exc_info=e)
             
             # Global status set removed in favor of per-shard status in on_shard_ready
+
+            # Initialize activity watchdog
+            asyncio.create_task(activity_watchdog())
             
             self._ready_once.set()
         else:
@@ -134,15 +137,6 @@ async def on_shard_connect(shard_id):
 async def on_shard_ready(shard_id):
     guilds = [g for g in bot.guilds if g.shard_id == shard_id]
     log.network(f"[Shard {shard_id+1}] ready - handling {len(guilds)} guild(s).")
-    
-    # Set per-shard presence
-    total_shards = bot.shard_count or 1
-    activity = discord.Activity(
-        type=discord.ActivityType.watching, 
-        name=f"over {len(guilds)} guilds | Shard {shard_id+1}/{total_shards}"
-    )
-    # Ensure we set it for this specific shard
-    await bot.change_presence(activity=activity, shard_id=shard_id)
 
 @bot.event
 async def on_shard_disconnect(shard_id):
@@ -158,6 +152,18 @@ async def kill_all_tasks():
         if task is current: continue
         task.cancel()
     await asyncio.sleep(1)
+
+async def activity_watchdog():
+    while not bot._is_shutting_down:
+        # repeat for update every 60 minutes
+        await asyncio.sleep(3600)
+        # Set per-shard presence
+        total_shards = bot.shard_count or 1
+        activity = discord.Activity(
+            type=discord.ActivityType.watching, 
+            name=f"over {len(bot.guilds)} guilds | Shard {bot.shard_id+1}/{total_shards}"
+        )
+        await bot.change_presence(status=discord.Status.online, activity=activity)
 
 async def graceful_shutdown():
     log.info("Shutdown signal received - performing cleanup...")
