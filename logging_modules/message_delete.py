@@ -74,7 +74,7 @@ class MessageDelete(BaseLogger):
 
         description = f"**{count} messages were bulk deleted in {channel.mention}**"
         
-        isbot = " | Bot" if executor.is_bot else ""
+        isbot = " | Bot" if executor and executor.bot else ""
 
         embed = EmbedBuilder.error(
             title="Bulk Message Delete",

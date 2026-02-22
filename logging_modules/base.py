@@ -111,7 +111,7 @@ class BaseLogger(commands.Cog):
         if self.module_name in ["MessageDelete", "MessageEdit"]:
             if msg_id: target_id = msg_id
         elif self.module_name in [
-            "MemberJoin", "MemberLeave", "MemberBan", "VoiceState", "NicknameUpdate", "MemberKick", "MemberTimeout"
+            "MemberJoin", "MemberLeave", "MemberBan", "VoiceState", "NicknameUpdate", "MemberKick", "TimeoutUpdate"
             ]:
             if mem_id: target_id = mem_id
             
@@ -153,7 +153,7 @@ class BaseLogger(commands.Cog):
                     target_id = msg_id
                     fallback_id = log_id  # server-logs is fallback
                 if msg_wh: target_wh = msg_wh
-            elif self.module_name in ["MemberJoin", "MemberLeave", "MemberBan", "VoiceState", "NicknameUpdate", "MemberKick"]:
+            elif self.module_name in ["MemberJoin", "MemberLeave", "MemberBan", "VoiceState", "NicknameUpdate", "MemberKick", "TimeoutUpdate"]:
                 if mem_id: 
                     target_id = mem_id
                     fallback_id = log_id  # server-logs is fallback
