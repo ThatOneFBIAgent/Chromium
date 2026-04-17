@@ -1,4 +1,5 @@
 import discord
+import asyncio
 from discord.ext import commands
 from .base import BaseLogger
 from utils.embed_builder import EmbedBuilder
@@ -183,7 +184,6 @@ class ChannelUpdate(BaseLogger):
         self._processing_guilds.add(guild_id)
         
         # Wait for all ripple events to arrive (Discord usually sends them in a burst)
-        import asyncio
         await asyncio.sleep(1.5)
         
         updates = self._pos_update_queue.pop(guild_id, [])

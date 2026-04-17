@@ -108,6 +108,13 @@ async def add_log(guild_id: int, module_name: str, content: str):
     try:
         await db.connection.execute("INSERT INTO logs (guild_id, module_name, content) VALUES (?, ?, ?)", (guild_id, module_name, content))
         
+        # Increment historical counter
+        await db.connection.execute("""
+            INSERT INTO global_stats (stat_key, stat_value) 
+            VALUES ('total_logs_sent', 1) 
+            ON CONFLICT(stat_key) DO UPDATE SET stat_value = stat_value + 1
+        """)
+        
         await db.connection.execute("""
             DELETE FROM logs 
             WHERE guild_id = ? 
@@ -319,3 +326,17 @@ async def get_all_list_items(guild_id: int):
     except Exception as e:
         log.error(f"Failed to fetch all list items for guild {guild_id}", exc_info=e)
         return []
+
+async def get_total_logs_count() -> int:
+    """
+    Returns the total number of logs recorded globally.
+    """
+    if not db.connection:
+        return 0
+    try:
+        cursor = await db.connection.execute("SELECT stat_value FROM global_stats WHERE stat_key = 'total_logs_sent'")
+        row = await cursor.fetchone()
+        return row[0] if row else 0
+    except Exception as e:
+        log.error("Failed to fetch total logs count", exc_info=e)
+        return 0

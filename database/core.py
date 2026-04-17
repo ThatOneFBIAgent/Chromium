@@ -111,6 +111,12 @@ class DatabaseManager:
             """,
             """
             CREATE INDEX IF NOT EXISTS idx_lists_guild ON server_lists(guild_id, list_type);
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS global_stats (
+                stat_key TEXT PRIMARY KEY,
+                stat_value INTEGER DEFAULT 0
+            );
             """
         ]
         
@@ -128,6 +134,17 @@ class DatabaseManager:
                 await self.connection.execute("ALTER TABLE guild_settings ADD COLUMN message_webhook_url TEXT")
                 await self.connection.execute("ALTER TABLE guild_settings ADD COLUMN member_webhook_url TEXT")
             
+            # Seed total_logs_sent if missing
+            res = await self.connection.execute("SELECT 1 FROM global_stats WHERE stat_key = 'total_logs_sent'")
+            if not await res.fetchone():
+                log.database("Seeding total_logs_sent statistic from current logs table...")
+                logs_res = await self.connection.execute("SELECT COUNT(*) FROM logs")
+                current_count = (await logs_res.fetchone())[0]
+                await self.connection.execute(
+                    "INSERT INTO global_stats (stat_key, stat_value) VALUES ('total_logs_sent', ?)",
+                    (current_count,)
+                )
+
             await self.connection.commit()
             log.database("Database schema initialization complete.")
         except Exception as e:
