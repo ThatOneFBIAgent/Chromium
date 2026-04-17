@@ -4,6 +4,12 @@ from .base import BaseLogger
 from utils.embed_builder import EmbedBuilder
 
 class ChannelUpdate(BaseLogger):
+    def __init__(self, bot: commands.Bot):
+        super().__init__(bot)
+        # Queue for position updates: guild_id -> list of (before_channel, after_channel)
+        self._pos_update_queue = {}
+        self._processing_guilds = set()
+
     @commands.Cog.listener()
     async def on_guild_channel_create(self, channel: discord.abc.GuildChannel):
         if not await self.should_log(channel.guild, channel=channel):
@@ -149,12 +155,87 @@ class ChannelUpdate(BaseLogger):
         if not fields:
             return
 
+        # --- Handle noisy position changes (ripples) ---
+        # If ONLY the position changed, it might be a ripple from another channel 
+        # being moved. We'll debounce these and check audit logs to find the "active" mover.
+        if len(fields) == 1 and fields[0][0] == "Position":
+            await self._queue_position_update(before, after)
+            return
+
         embed = EmbedBuilder.warning(
             title="Channel Updated",
             description=f"Channel {after.mention} (`{after.id}`) was updated.",
             fields=fields
         )
         await self.log_event(before.guild, embed)
+
+    async def _queue_position_update(self, before, after):
+        """Queues a position change for debounced processing via audit logs."""
+        guild_id = before.guild.id
+        if guild_id not in self._pos_update_queue:
+            self._pos_update_queue[guild_id] = []
+        
+        self._pos_update_queue[guild_id].append((before, after))
+
+        if guild_id in self._processing_guilds:
+            return
+
+        self._processing_guilds.add(guild_id)
+        
+        # Wait for all ripple events to arrive (Discord usually sends them in a burst)
+        import asyncio
+        await asyncio.sleep(1.5)
+        
+        updates = self._pos_update_queue.pop(guild_id, [])
+        self._processing_guilds.remove(guild_id)
+        
+        if not updates:
+            return
+
+        # Fetch recent audit logs to identify the "real" movers
+        # A single move usually generates ONE audit log entry for the target channel.
+        # Ripples do NOT generate audit log entries.
+        try:
+            # We look for CHANNEL_UPDATE entries
+            audit_logs = [
+                entry async for entry in before.guild.audit_logs(
+                    limit=min(20, len(updates) + 5), 
+                    action=discord.AuditLogAction.channel_update
+                )
+            ]
+        except discord.errors.Forbidden:
+            # If we can't see audit logs, we'll log them all as a fallback 
+            # (though this may flood, it's safer than losing data if bot perm is missing)
+            audit_logs = None
+        except Exception:
+            audit_logs = None
+
+        for b, a in updates:
+            should_log = False
+            
+            if audit_logs is None:
+                # Fallback: if we can't verify, log it
+                should_log = True
+            else:
+                # Find if this channel has a corresponding audit log entry with a position change
+                for entry in audit_logs:
+                    if entry.target and entry.target.id == a.id:
+                        # Inspect the audit log differences
+                        if hasattr(entry.after, "position"):
+                            should_log = True
+                            break
+            
+            if should_log:
+                # Re-check should_log settings just in case
+                if not await self.should_log(a.guild, channel=a):
+                    continue
+
+                embed = EmbedBuilder.warning(
+                    title="Channel Moved",
+                    description=f"Channel {a.mention} (`{a.id}`) position changed.",
+                    fields=[("Position", f"`{b.position}` → `{a.position}`", True)]
+                )
+                await self.log_event(a.guild, embed)
         
 async def setup(bot: commands.Bot):
     await bot.add_cog(ChannelUpdate(bot))
