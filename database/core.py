@@ -1,5 +1,6 @@
 import aiosqlite
 import os
+import asyncio
 from utils.logger import get_logger
 
 # Initialize logger
@@ -11,6 +12,10 @@ class DatabaseManager:
     def __init__(self, db_path: str = DB_PATH):
         self.db_path = db_path
         self.connection = None
+        self._log_counter = 0
+        self._flush_task = None
+        self._log_queue = asyncio.Queue()
+        self._log_worker_task = None
 
     async def connect(self):
         try:
@@ -19,6 +24,13 @@ class DatabaseManager:
             await self.connection.execute("PRAGMA foreign_keys = ON")
             log.database(f"Connected to SQLite database at {self.db_path}")
             await self.init_schema()
+            
+            # Start background tasks
+            import asyncio
+            if self._flush_task is None:
+                self._flush_task = asyncio.create_task(self._periodic_flush())
+            if self._log_worker_task is None:
+                self._log_worker_task = asyncio.create_task(self._log_worker())
         except Exception as e:
             log.error("Failed to connect to database", exc_info=e)
             raise
@@ -152,9 +164,145 @@ class DatabaseManager:
             raise
 
     async def close(self):
+        if self._flush_task:
+            self._flush_task.cancel()
+            try:
+                await self._flush_task
+            except asyncio.CancelledError:
+                pass
+            self._flush_task = None
+        
+        # Stop worker and wait for queue
+        if self._log_worker_task:
+            # We don't cancel immediately, we want to drain if possible
+            # But during shutdown, we might just want to force it
+            if not self._log_queue.empty():
+                log.database(f"Draining {self._log_queue.qsize()} logs before closing...")
+                # Allow a small window to drain
+                try:
+                    await asyncio.wait_for(self._log_queue.join(), timeout=5.0)
+                except asyncio.TimeoutError:
+                    log.warning("Timeout draining log queue, some logs may be lost.")
+            
+            self._log_worker_task.cancel()
+            try:
+                await self._log_worker_task
+            except asyncio.CancelledError:
+                pass
+            self._log_worker_task = None
+            
+        # Final flush
+        await self.flush_stats()
+        
         if self.connection:
             await self.connection.close()
             log.database("Database connection closed.")
+
+    async def _periodic_flush(self):
+        """Background task to flush statistics to the database periodically."""
+        import asyncio
+        while True:
+            try:
+                await asyncio.sleep(60) # Flush every 60 seconds
+                await self.flush_stats()
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                log.error(f"Error in periodic stats flush: {e}")
+
+    async def flush_stats(self):
+        """Flushes in-memory counters to the database."""
+        if self._log_counter <= 0 or not self.connection:
+            return
+
+        count_to_add = self._log_counter
+        self._log_counter = 0
+        
+        try:
+            await self.connection.execute("""
+                INSERT INTO global_stats (stat_key, stat_value) 
+                VALUES ('total_logs_sent', ?) 
+                ON CONFLICT(stat_key) DO UPDATE SET stat_value = stat_value + excluded.stat_value
+            """, (count_to_add,))
+            await self.connection.commit()
+            log.trace(f"Flushed {count_to_add} log(s) to historical counter.")
+        except Exception as e:
+            # Restore the counter if it failed
+            self._log_counter += count_to_add
+            log.error(f"Failed to flush log counter: {e}")
+
+    def increment_log_count(self):
+        """Increments the in-memory log counter."""
+        self._log_counter += 1
+
+    def queue_log(self, guild_id: int, module_name: str, content: str):
+        """Queues a log entry to be written in the next batch."""
+        self._log_queue.put_nowait((guild_id, module_name, content))
+        # We still increment the counter here
+        self.increment_log_count()
+
+    async def _log_worker(self):
+        """Background task that writes logs in batches."""
+        import asyncio
+        while True:
+            try:
+                # Wait for at least one log
+                batch = []
+                item = await self._log_queue.get()
+                batch.append(item)
+                
+                # Siphon up more if available
+                while not self._log_queue.empty() and len(batch) < 100:
+                    batch.append(self._log_queue.get_nowait())
+                
+                await self._write_log_batch(batch)
+                
+                # Mark as done
+                for _ in range(len(batch)):
+                    self._log_queue.task_done()
+                    
+                # Short break to allow other tasks to run if we are slammed
+                await asyncio.sleep(0.1)
+                
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                log.error(f"Error in log worker: {e}")
+                await asyncio.sleep(1) # Backoff on error
+
+    async def _write_log_batch(self, batch):
+        """Writes a batch of logs to the database in a single transaction."""
+        if not self.connection or not batch:
+            return
+            
+        try:
+            # Insert logs
+            await self.connection.executemany(
+                "INSERT INTO logs (guild_id, module_name, content) VALUES (?, ?, ?)",
+                batch
+            )
+            
+            # Get unique guild IDs to trim their logs
+            guild_ids = {item[0] for item in batch}
+            
+            # Trim logs for each guild
+            # NOTE: Doing this for every batch might still be excessive if the same guild logs 100 times.
+            # But it's better than doing it for EVERY single log.
+            for guild_id in guild_ids:
+                 await self.connection.execute("""
+                    DELETE FROM logs 
+                    WHERE guild_id = ? 
+                    AND id NOT IN (
+                        SELECT id FROM logs 
+                        WHERE guild_id = ? 
+                        ORDER BY id DESC 
+                        LIMIT 50
+                    )
+                """, (guild_id, guild_id))
+            
+            await self.connection.commit()
+        except Exception as e:
+            log.error(f"Failed to write log batch: {e}")
 
 # Global DB instance
 db = DatabaseManager()

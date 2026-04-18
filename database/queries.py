@@ -102,33 +102,10 @@ async def get_guild_settings(guild_id: int):
         return None, None, None, None, None, None, {}
 
 async def add_log(guild_id: int, module_name: str, content: str):
-    if not db.connection:
-        return
-
-    try:
-        await db.connection.execute("INSERT INTO logs (guild_id, module_name, content) VALUES (?, ?, ?)", (guild_id, module_name, content))
-        
-        # Increment historical counter
-        await db.connection.execute("""
-            INSERT INTO global_stats (stat_key, stat_value) 
-            VALUES ('total_logs_sent', 1) 
-            ON CONFLICT(stat_key) DO UPDATE SET stat_value = stat_value + 1
-        """)
-        
-        await db.connection.execute("""
-            DELETE FROM logs 
-            WHERE guild_id = ? 
-            AND id NOT IN (
-                SELECT id FROM logs 
-                WHERE guild_id = ? 
-                ORDER BY id DESC 
-                LIMIT 50
-            )
-        """, (guild_id, guild_id))
-        
-        await db.connection.commit()
-    except Exception as e:
-        log.error(f"Failed to add log for guild {guild_id}", exc_info=e)
+    """
+    Adds a log entry via an in-memory queue for high-performance batching.
+    """
+    db.queue_log(guild_id, module_name, content)
 
 async def get_recent_logs(guild_id: int, limit: int = 50):
     if not db.connection:
@@ -336,7 +313,8 @@ async def get_total_logs_count() -> int:
     try:
         cursor = await db.connection.execute("SELECT stat_value FROM global_stats WHERE stat_key = 'total_logs_sent'")
         row = await cursor.fetchone()
-        return row[0] if row else 0
+        db_count = row[0] if row else 0
+        return db_count + db._log_counter
     except Exception as e:
         log.error("Failed to fetch total logs count", exc_info=e)
         return 0
