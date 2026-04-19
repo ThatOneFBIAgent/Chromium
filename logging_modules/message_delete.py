@@ -65,14 +65,15 @@ class MessageDelete(BaseLogger):
             return "\n".join(lines)
 
         if is_log_channel and autolog_enabled:
-            del_str = executor.mention if executor else "Unknown Administrator"
-            
             if message.embeds:
                 embed = message.embeds[0].copy()
                 embed_title = embed.title or "Log Entry"
-                embed.title = f"[RESTORED] {embed_title}"
+                
+                # Prevent infinite stacking of [RESTORED] tags
+                if not embed_title.startswith("[RESTORED]"):
+                    embed.title = f"[RESTORED] {embed_title}"
+                    
                 embed.color = discord.Color.dark_red()
-                embed.add_field(name="⚠️ Autolog Restored", value=f"Attempted Deletion by: {del_str}", inline=False)
                 await self.log_event(message.guild, embed, suspicious=True)
             else:
                 embed = EmbedBuilder.error(
@@ -81,7 +82,6 @@ class MessageDelete(BaseLogger):
                     author=message.author,
                     footer=f"Original Author UID: {message.author.id}"
                 )
-                embed.add_field(name="⚠️ Autolog Restored", value=f"Attempted Deletion by: {del_str}", inline=False)
                 
                 if message.attachments:
                     if len(message.attachments) == 1 and message.attachments[0].content_type and message.attachments[0].content_type.startswith("image/"):
