@@ -38,12 +38,17 @@ class MessageDelete(BaseLogger):
         try:
             await asyncio.sleep(0.5) # Give the audit log a moment to populate
             async for entry in message.guild.audit_logs(limit=3, action=discord.AuditLogAction.message_delete):
-                if entry.target.id == message.author.id and entry.extra.channel.id == message.channel.id:
-                    # Verify it happened recently (within 10 seconds)
-                    if (discord.utils.utcnow() - entry.created_at).total_seconds() < 10:
-                        executor = entry.user
-                        break
-        except discord.Forbidden:
+                if hasattr(entry.extra, "channel") and entry.extra.channel.id == message.channel.id:
+                    # In log channels, webhook authors cause target ID mismatches in the API, 
+                    # so we loosen the check to rely on the channel & timestamp instead.
+                    target_match = getattr(entry.target, "id", None) == message.author.id
+                    
+                    if is_log_channel or target_match:
+                        # Verify it happened recently (within 10 seconds)
+                        if abs((discord.utils.utcnow() - entry.created_at).total_seconds()) < 10:
+                            executor = entry.user
+                            break
+        except Exception:
             pass
 
         # Suspicious check
