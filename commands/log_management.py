@@ -102,6 +102,31 @@ class LogManagement(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
+    async def _send_config_log(self, guild: discord.Guild, embed: discord.Embed):
+        from utils.rate_limiter import send_with_backoff
+        try:
+            res = await get_guild_settings(guild.id)
+            if not res or not res[0]:
+                return
+            log_id = res[0]
+            log_wh = res[3]
+            
+            if log_wh:
+                success, _ = await send_with_backoff(
+                    lambda: discord.Webhook.from_url(
+                        log_wh, session=self.bot.http_session, client=self.bot
+                    ).send(embed=embed)
+                )
+                if success:
+                    return
+            
+            if log_id:
+                channel = guild.get_channel(log_id)
+                if channel:
+                    await send_with_backoff(lambda: channel.send(embed=embed))
+        except Exception:
+            pass
+
     log_group = app_commands.Group(name="log", description="Manage logging modules")
 
     @log_group.command(name="list", description="List all modules and their status")
@@ -180,51 +205,120 @@ class LogManagement(commands.Cog):
             for m in MODULES if current.lower() in m.lower()
         ][:25]
 
-    @log_group.command(name="enable", description="Enable a logging module")
+    @log_group.command(name="enable", description="Enable logging module(s) (comma separated or 'All')")
     @app_commands.guild_only()
     @app_commands.checks.has_permissions(manage_guild=True)
     @app_commands.checks.cooldown(1, 40, key=lambda i: (i.guild_id, i.user.id))
-    async def enable_module(self, interaction: discord.Interaction, module: str):
+    async def enable_module(self, interaction: discord.Interaction, modules: str):
         await interaction.response.defer()
-        if module not in MODULES:
-            await interaction.followup.send(f"Invalid module: {module}", ephemeral=True)
-            return
+        
+        if modules.strip().lower() == "all":
+            target_modules = MODULES
+        else:
+            import re
+            parts = [m.strip() for m in re.split(r'[,\s]+', modules) if m.strip()]
+            target_modules = [m for m in parts if m in MODULES]
             
-        await upsert_guild_settings(interaction.guild_id, enabled_modules={module: True})
+            if not target_modules:
+                await interaction.followup.send("Invalid module(s) provided. Check spelling or use 'All'.", ephemeral=True)
+                return
+                
+        update_dict = {m: True for m in target_modules}
+        await upsert_guild_settings(interaction.guild_id, enabled_modules=update_dict)
         
+        module_list_str = ", ".join(target_modules)
+        if len(module_list_str) > 1000:
+            module_list_str = f"{len(target_modules)} modules"
+            
         await interaction.followup.send(
-            embed=EmbedBuilder.success("Module Enabled", f"**{module}** is now enabled.")
+            embed=EmbedBuilder.success("Modules Enabled", f"Successfully enabled: **{module_list_str}**")
         )
         
-    @enable_module.autocomplete('module')
+        embed = EmbedBuilder.warning(
+            "⚙️ Configuration Changed",
+            f"**{interaction.user.mention}** enabled: `{module_list_str}`"
+        )
+        await self._send_config_log(interaction.guild, embed)
+        
+    @enable_module.autocomplete('modules')
     async def enable_module_autocomplete(self, interaction: discord.Interaction, current: str):
-        return [
-            app_commands.Choice(name=m, value=m)
-            for m in MODULES if current.lower() in m.lower()
-        ]
+        parts = current.split(',')
+        prefix = ",".join(parts[:-1])
+        if prefix:
+            prefix += ","
+            
+        search_term = parts[-1].strip().lower()
+        choices = []
+        
+        if not prefix and 'all' in "all".lower():
+            choices.append(app_commands.Choice(name="All Modules (Mass Enable)", value="All"))
+            
+        for m in MODULES:
+            if search_term in m.lower():
+                choice_name = f"{prefix} {m}".strip()
+                choice_value = f"{prefix}{m}"
+                if len(choice_name) <= 100:
+                    choices.append(app_commands.Choice(name=choice_name, value=choice_value))
+                
+        return choices[:25]
 
-    @log_group.command(name="disable", description="Disable a logging module")
+    @log_group.command(name="disable", description="Disable logging module(s) (comma separated or 'All')")
     @app_commands.guild_only()
     @app_commands.checks.has_permissions(manage_guild=True)
     @app_commands.checks.cooldown(1, 40, key=lambda i: (i.guild_id, i.user.id))
-    async def disable_module(self, interaction: discord.Interaction, module: str):
+    async def disable_module(self, interaction: discord.Interaction, modules: str):
         await interaction.response.defer()
-        if module not in MODULES:
-            await interaction.followup.send(f"Invalid module: {module}", ephemeral=True)
-            return
-
-        await upsert_guild_settings(interaction.guild_id, enabled_modules={module: False})
         
-        await interaction.response.send_message(
-            embed=EmbedBuilder.success("Module Disabled", f"**{module}** is now disabled.")
-        )
+        if modules.strip().lower() == "all":
+            target_modules = MODULES
+        else:
+            import re
+            parts = [m.strip() for m in re.split(r'[,\s]+', modules) if m.strip()]
+            target_modules = [m for m in parts if m in MODULES]
+            
+            if not target_modules:
+                await interaction.followup.send("Invalid module(s) provided. Check spelling or use 'All'.", ephemeral=True)
+                return
 
-    @disable_module.autocomplete('module')
+        update_dict = {m: False for m in target_modules}
+        await upsert_guild_settings(interaction.guild_id, enabled_modules=update_dict)
+        
+        module_list_str = ", ".join(target_modules)
+        if len(module_list_str) > 1000:
+            module_list_str = f"{len(target_modules)} modules"
+            
+        await interaction.followup.send(
+            embed=EmbedBuilder.success("Modules Disabled", f"Successfully disabled: **{module_list_str}**")
+        )
+        
+        embed = EmbedBuilder.warning(
+            "⚠️ Security Alert: Configuration Changed",
+            f"**{interaction.user.mention}** disabled: `{module_list_str}`"
+        )
+        embed.color = discord.Color.dark_red()
+        await self._send_config_log(interaction.guild, embed)
+
+    @disable_module.autocomplete('modules')
     async def disable_module_autocomplete(self, interaction: discord.Interaction, current: str):
-        return [
-            app_commands.Choice(name=m, value=m)
-            for m in MODULES if current.lower() in m.lower()
-        ]
+        parts = current.split(',')
+        prefix = ",".join(parts[:-1])
+        if prefix:
+            prefix += ","
+            
+        search_term = parts[-1].strip().lower()
+        choices = []
+        
+        if not prefix and 'all' in "all".lower():
+            choices.append(app_commands.Choice(name="All Modules (Mass Disable)", value="All"))
+            
+        for m in MODULES:
+            if search_term in m.lower():
+                choice_name = f"{prefix} {m}".strip()
+                choice_value = f"{prefix}{m}"
+                if len(choice_name) <= 100:
+                    choices.append(app_commands.Choice(name=choice_name, value=choice_value))
+                
+        return choices[:25]
 
     @log_group.command(name="channel", description="Move all logging to a new channel (Simple Setup only)")
     @app_commands.guild_only()
@@ -295,6 +389,12 @@ class LogManagement(commands.Cog):
                 f"All logging has been moved to {channel.mention}."
             )
         )
+        
+        embed = EmbedBuilder.warning(
+            "⚙️ Configuration Changed",
+            f"**{interaction.user.mention}** redirected all logging channels to {channel.mention}."
+        )
+        await self._send_config_log(interaction.guild, embed)
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(LogManagement(bot))
