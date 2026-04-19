@@ -22,12 +22,15 @@ class MessageDelete(BaseLogger):
 
         # Check if it was in a log channel
         is_log_channel = False
+        autolog_enabled = False
         try:
             res = await get_guild_settings(message.guild.id)
             if res and res[0]:
                 log_channels = {res[0], res[1], res[2]}
                 if message.channel.id in log_channels:
                     is_log_channel = True
+                if len(res) > 6 and res[6]:
+                    autolog_enabled = res[6].get("AutoLog", False)
         except Exception:
             pass
 
@@ -54,6 +57,42 @@ class MessageDelete(BaseLogger):
         # Suspicious check
         is_suspicious = suspicious_detector.check_message_delete(message.guild.id, message.author.id)
         
+        # Attachments helper
+        def format_attachments(attachments):
+            lines = []
+            for a in attachments:
+                size_kb = round(a.size / 1024, 2)
+                spoiler = " (spoiler)" if a.is_spoiler() else ""
+                lines.append(f"- `{a.filename}` ({size_kb} KB){spoiler}\n{a.url}")
+            return "\n".join(lines)
+
+        if is_log_channel and autolog_enabled:
+            del_str = executor.mention if executor else "Unknown Administrator"
+            
+            if message.embeds:
+                embed = message.embeds[0].copy()
+                embed_title = embed.title or "Log Entry"
+                embed.title = f"[RESTORED] {embed_title}"
+                embed.color = discord.Color.dark_red()
+                embed.add_field(name="⚠️ Autolog Restored", value=f"Attempted Deletion by: {del_str}", inline=False)
+                await self.log_event(message.guild, embed, suspicious=True)
+            else:
+                embed = EmbedBuilder.error(
+                    title="[RESTORED] Message Restored",
+                    description=message.content or "*No text content*",
+                    author=message.author,
+                    footer=f"Original Author UID: {message.author.id}"
+                )
+                embed.add_field(name="⚠️ Autolog Restored", value=f"Attempted Deletion by: {del_str}", inline=False)
+                
+                if message.attachments:
+                    if len(message.attachments) == 1 and message.attachments[0].content_type and message.attachments[0].content_type.startswith("image/"):
+                        embed.set_image(url=message.attachments[0].url)
+                    embed.description += "\n\n**Attachments:**\n" + format_attachments(message.attachments)
+                    
+                await self.log_event(message.guild, embed, suspicious=True)
+            return
+
         if is_log_channel:
             is_suspicious = True
             description = f"**⚠️ WARNING: Log entry deleted in {message.channel.mention}**\n"
@@ -66,18 +105,11 @@ class MessageDelete(BaseLogger):
         if message.content:
             description += f"\n**Content:**\n{message.content}"
         
-        # Attachments
-        def format_attachments(attachments):
-            lines = []
-            for a in attachments:
-                size_kb = round(a.size / 1024, 2)
-                spoiler = " (spoiler)" if a.is_spoiler() else ""
-                lines.append(
-                    f"- `{a.filename}` ({size_kb} KB){spoiler}\n{a.url}"
-                )
-            return "\n".join(lines)
-
+        single_image_url = None
         if message.attachments:
+            if len(message.attachments) == 1 and message.attachments[0].content_type and message.attachments[0].content_type.startswith("image/"):
+                 single_image_url = message.attachments[0].url
+                 
             description += "\n\n**Attachments:**\n"
             description += format_attachments(message.attachments)
 
@@ -87,6 +119,9 @@ class MessageDelete(BaseLogger):
             author=message.author,
             footer=f"User ID: {message.author.id} | Message ID: {message.id}{footer}"
         )
+        
+        if single_image_url:
+            embed.set_image(url=single_image_url)
         
         await self.log_event(message.guild, embed, suspicious=is_suspicious)
 

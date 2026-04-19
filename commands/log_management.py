@@ -11,7 +11,7 @@ MODULES = [
     "MessageDelete", "MessageEdit", "MemberJoin", "MemberLeave", 
     "VoiceState", "RoleUpdate", "ChannelUpdate", "ErrorLogger",
     "MemberBan", "GuildUpdate", "EmojiUpdate", "MemberKick", "NicknameUpdate",
-    "TimeoutUpdate", "WebhookUpdate", "InviteUpdate"
+    "TimeoutUpdate", "WebhookUpdate", "InviteUpdate", "AutoLog"
 ]
 
 # Module information for /log info command
@@ -95,6 +95,11 @@ MODULE_INFO = {
         "description": "Logs invite creation and deletion.",
         "events": ["on_invite_create", "on_invite_delete"],
         "channel": "server-logs"
+    },
+    "AutoLog": {
+        "description": "Automatically restores and protects log entries from being deleted in log channels.",
+        "events": ["on_message_delete"],
+        "channel": "(Same as deleted message)"
     }
 }
 
