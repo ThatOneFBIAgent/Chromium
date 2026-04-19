@@ -35,24 +35,22 @@ class MessageDelete(BaseLogger):
             pass
 
         executor = None
-        # Try to find who deleted it via Audit Log
-        # If a user deletes someone else's message, it creates an Audit Log entry.
-        # This is especially useful if an admin deletes a log message sent by the bot.
-        try:
-            await asyncio.sleep(0.5) # Give the audit log a moment to populate
-            async for entry in message.guild.audit_logs(limit=3, action=discord.AuditLogAction.message_delete):
-                if hasattr(entry.extra, "channel") and entry.extra.channel.id == message.channel.id:
-                    # In log channels, webhook authors cause target ID mismatches in the API, 
-                    # so we loosen the check to rely on the channel & timestamp instead.
-                    target_match = getattr(entry.target, "id", None) == message.author.id
-                    
-                    if is_log_channel or target_match:
-                        # Verify it happened recently (within 10 seconds)
-                        if abs((discord.utils.utcnow() - entry.created_at).total_seconds()) < 10:
-                            executor = entry.user
-                            break
-        except Exception:
-            pass
+        # Try to find who deleted it via Audit Log (Requires waiting for Discord's API)
+        # Webhook embed deletions are rarely logged accurately by Discord's UI,
+        # so we skip this time-consuming check entirely for log channels to ensure instant response.
+        if not is_log_channel:
+            try:
+                await asyncio.sleep(0.5) 
+                async for entry in message.guild.audit_logs(limit=3, action=discord.AuditLogAction.message_delete):
+                    if hasattr(entry.extra, "channel") and entry.extra.channel.id == message.channel.id:
+                        target_match = getattr(entry.target, "id", None) == message.author.id
+                        
+                        if target_match:
+                            if abs((discord.utils.utcnow() - entry.created_at).total_seconds()) < 10:
+                                executor = entry.user
+                                break
+            except Exception:
+                pass
 
         # Suspicious check
         is_suspicious = suspicious_detector.check_message_delete(message.guild.id, message.author.id)
