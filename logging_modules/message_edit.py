@@ -1,40 +1,71 @@
-import difflib
 import discord
 from discord.ext import commands
 from .base import BaseLogger
 from utils.embed_builder import EmbedBuilder
 from utils.suspicious import suspicious_detector
 
-CONTEXT_LINES = 3
-FIELD_LIMIT = 1024
-SNIPPET_LEN = 300
+class MessageEdit(BaseLogger):
+    @commands.Cog.listener()
+    async def on_message_edit(self, before: discord.Message, after: discord.Message):
+        if before.author.bot:
+            return
 
+        if not before.guild:
+            return
 
-def _truncate(text: str, limit: int = SNIPPET_LEN) -> str:
-    return text if len(text) <= limit else text[:limit] + "…"
+        if not await self.should_log(before.guild, before.author, before.channel):
+            return    
 
+        before_files = {a.filename for a in before.attachments}
+        after_files = {a.filename for a in after.attachments}
 
-def _build_diff_hunks(before: str, after: str, context: int = CONTEXT_LINES) -> str:
-    before_lines = before.splitlines()
-    after_lines  = after.splitlines()
+        removed = before_files - after_files
+        if removed:
+            embed = EmbedBuilder.warning(
+                title="Message Attachment Removed",
+                description=f"Attachment removed from a message in {after.channel.mention}",
+                fields=[
+                    ("Removed Files", "\n".join(removed), False)
+                ],
+                author=after.author,
+                footer=f"User ID: {after.author.id} | Message ID: {after.id}"
+            )
 
-    matcher = difflib.SequenceMatcher(None, before_lines, after_lines)
-    opcodes = matcher.get_opcodes()
+            await self.log_event(after.guild, embed, suspicious=True)
 
-    hunks: list[list[str]] = []
-    current_hunk: list[str] = []
-    last_end = None
+            # if only attachments changed, stop here
+            if before.content == after.content:
+                return
 
-    for tag, i1, i2, j1, j2 in opcodes:
-        if tag == "equal":
-            if current_hunk:
-                for line in before_lines[i1:min(i1 + context, i2)]:
-                    current_hunk.append(f"  {line}")
-                if i2 - i1 > context * 2:
-                    hunks.append(current_hunk)
-                    current_hunk = []
-                    last_end = i2
-                else:
+        # content didnt change, nothing else to log
+        if before.content == after.content:
+            return
+
+        is_suspicious = suspicious_detector.check_message_edit(
+            before.guild.id,
+            before.author.id
+        )
+
+        description = (
+            f"**Message edited in {before.channel.mention}** "
+            f"[Jump to Message]({after.jump_url})"
+        )
+
+        embed = EmbedBuilder.warning(
+            title="Message Edited",
+            description=description,
+            author=before.author,
+            footer=f"User ID: {before.author.id} | Message ID: {before.id}",
+            fields=[
+                ("Before", before.content or "*Empty*", False),
+                ("After", after.content or "*Empty*", False)
+            ]
+        )
+
+        await self.log_event(before.guild, embed, suspicious=is_suspicious)
+
+async def setup(bot):
+    await bot.add_cog(MessageEdit(bot))                else:
                     for line in before_lines[max(i2 - context, i1 + context):i2]:
                         current_hunk.append(f"  {line}")
             else:
