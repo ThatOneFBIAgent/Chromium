@@ -109,7 +109,7 @@ Chromium exists to fill the gap for a reliable, self-hosted logging solution tha
 Chromium uses Slash Commands for all interactions.
 
 -   `/setup` - Initialize the bot for your server.
--   `/log <module> <channel>` - Configure a logging module to a specific channel.
+-   `/log <module>` - Configure a logging module to a specific channel.
 -   `/export` - Export logs to a JSON file for safekeeping.
 
 ### Configuration Example

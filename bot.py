@@ -70,7 +70,22 @@ class Chromium(commands.AutoShardedBot):
         await self._load_extensions_from("services")
 
         # Start status reporter for dashboard
-        monitor = BotMonitor(reporter, self)
+        self.cached_total_logs = 0
+        async def update_logs():
+            from database.queries import get_total_logs_count
+            while True:
+                try:
+                    self.cached_total_logs = await get_total_logs_count()
+                except: pass
+                await asyncio.sleep(60)
+        
+        asyncio.create_task(update_logs())
+        
+        monitor = BotMonitor(
+            reporter, 
+            self, 
+            custom_metrics_callback=lambda: {"total_logs": self.cached_total_logs}
+        )
         asyncio.create_task(monitor.run_forever())
 
         # Sync generic commands (global)
