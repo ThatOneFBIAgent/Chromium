@@ -16,6 +16,13 @@ from config import shared_config
 from database.core import db
 from utils.logger import get_logger
 from utils.drive import drive_manager
+from utils.status import StatusReporter, BotMonitor
+
+reporter = StatusReporter(
+    api_url=os.getenv("DASHBOARD_URL"),          # Railway internal link
+    private_key_pem=os.getenv("RSA_PRIVATE_KEY"), # PEM string
+    bot_id="chromium",
+)
 
 log = get_logger()
 
@@ -61,7 +68,11 @@ class Chromium(commands.AutoShardedBot):
         await self._load_extensions_from("logging_modules")
         await self._load_extensions_from("commands")
         await self._load_extensions_from("services")
-        
+
+        # Start status reporter for dashboard
+        monitor = BotMonitor(reporter, self)
+        asyncio.create_task(monitor.run_forever())
+
         # Sync generic commands (global)
         try:
             log.info("Starting command tree sync...")
