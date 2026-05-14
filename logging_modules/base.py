@@ -102,7 +102,9 @@ class BaseLogger(commands.Cog):
         log_id, msg_id, mem_id = res[0], res[1], res[2]
         enabled_modules = res[6]
         
-        if not enabled_modules.get(self.module_name, False):
+        import re
+        normalized_name = re.sub(r'(?<!^)(?=[A-Z])', '_', self.module_name).lower()
+        if not enabled_modules.get(normalized_name, False):
             return None
             
         # Routing Logic
@@ -138,7 +140,9 @@ class BaseLogger(commands.Cog):
             log_wh, msg_wh, mem_wh = res[3], res[4], res[5]
             enabled_modules = res[6]
             
-            if not enabled_modules.get(self.module_name, False):
+            import re
+            normalized_name = re.sub(r'(?<!^)(?=[A-Z])', '_', self.module_name).lower()
+            if not enabled_modules.get(normalized_name, False):
                 return
 
             target_id = log_id

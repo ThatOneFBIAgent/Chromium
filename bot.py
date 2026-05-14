@@ -47,6 +47,32 @@ class Chromium(commands.AutoShardedBot):
         self._is_shutting_down = False
         self._ready_once = asyncio.Event()
 
+    async def global_config_check(self, interaction: discord.Interaction) -> bool:
+        # 1. Dashboard Config Overrides (Enabled Modules)
+        guild_id = interaction.guild.id if interaction.guild else None
+        if guild_id and interaction.type == discord.InteractionType.application_command:
+            settings = getattr(self, "config_sync", None)
+            if settings:
+                guild_cfg = settings.get(guild_id)
+                if guild_cfg:
+                    cmd_name = interaction.command.name if interaction.command else ""
+                    
+                    # Module Check
+                    cog_name = getattr(interaction.command, "binding", None)
+                    if cog_name:
+                        cog_class_name = cog_name.__class__.__name__
+                        import re
+                        normalized_cog = re.sub(r'(?<!^)(?=[A-Z])', '_', cog_class_name).lower()
+                        
+                        modules = guild_cfg.get("enabled_modules", {})
+                        if modules.get(normalized_cog) is False:
+                            await interaction.response.send_message(
+                                f"❌ The `{normalized_cog}` module is disabled in this server.",
+                                ephemeral=True
+                            )
+                            return False
+        return True
+
     async def setup_hook(self):
         """
         Async setup hook to initialize DB and load extensions.
@@ -96,6 +122,9 @@ class Chromium(commands.AutoShardedBot):
         )
         asyncio.create_task(self.config_sync.run_forever())
 
+        # Register global checks
+        self.tree.interaction_check = self.global_config_check
+        
         # Sync generic commands (global)
         try:
             log.info("Starting command tree sync...")
