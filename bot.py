@@ -16,7 +16,7 @@ from config import shared_config
 from database.core import db
 from utils.logger import get_logger
 from utils.drive import drive_manager
-from utils.status import StatusReporter, BotMonitor
+from utils.status import StatusReporter, BotMonitor, ConfigSync
 
 reporter = StatusReporter(
     api_url=os.getenv("DASHBOARD_URL"),          # Railway internal link
@@ -87,6 +87,14 @@ class Chromium(commands.AutoShardedBot):
             custom_metrics_callback=lambda: {"total_logs": self.cached_total_logs}
         )
         asyncio.create_task(monitor.run_forever())
+        
+        # Start config polling
+        self.config_sync = ConfigSync(
+            api_url=os.getenv("DASHBOARD_URL"),
+            bot_id="chromium",
+            bot=self,
+        )
+        asyncio.create_task(self.config_sync.run_forever())
 
         # Sync generic commands (global)
         try:
@@ -255,6 +263,10 @@ async def graceful_shutdown():
     # Close shared http session
     if bot.http_session and not bot.http_session.closed:
         await bot.http_session.close()
+
+    # Close ConfigSync session
+    if hasattr(bot, "config_sync"):
+        await bot.config_sync.close()
 
     # Close bot
     await kill_all_tasks()
