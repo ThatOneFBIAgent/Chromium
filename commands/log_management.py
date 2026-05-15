@@ -140,7 +140,7 @@ class LogManagement(commands.Cog):
     @app_commands.checks.cooldown(1, 40, key=lambda i: (i.guild_id, i.user.id))
     async def list_modules(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=False)
-        # Unpack all 9 values
+        # Unpack local settings
         res = await get_guild_settings(interaction.guild_id)
         if not res or not res[0]: # Check if log_id is set
              await interaction.followup.send(
@@ -148,15 +148,32 @@ class LogManagement(commands.Cog):
             )
              return
              
-        # Extract enabled_modules (last item in 7-value tuple)
-        enabled_modules = res[6] 
-
+        local_enabled = res[6] 
+        
+        # Check dashboard sync
+        dashboard_cfg = {}
+        if hasattr(self.bot, "config_sync"):
+            dashboard_cfg = self.bot.config_sync.get(interaction.guild_id)
+        dashboard_enabled = dashboard_cfg.get("enabled_modules", {})
 
         status_text = ""
+        import re
         for module in MODULES:
-            is_enabled = enabled_modules.get(module, False)
-            icon = "✅" if is_enabled else "❌"
-            status_text += f"{icon} **{module}**\n"
+            # Local state
+            is_local_enabled = local_enabled.get(module, False)
+            
+            # Dashboard state (normalized)
+            normalized_name = re.sub(r'(?<!^)(?=[A-Z])', '_', module).lower()
+            is_dash_enabled = dashboard_enabled.get(normalized_name, True) # Default to true if not in dash
+            
+            if is_dash_enabled is False:
+                icon = "🚫" # Globally Disabled
+                note = " (Globally Disabled)"
+            else:
+                icon = "✅" if is_local_enabled else "❌"
+                note = ""
+                
+            status_text += f"{icon} **{module}**{note}\n"
             
         embed = EmbedBuilder.build(
             title="Logging Modules",

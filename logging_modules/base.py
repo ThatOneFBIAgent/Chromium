@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 import discord
+import re
 from typing import Optional, Union, List
 from discord.ext import commands
 from database.queries import get_guild_settings, add_log, get_all_list_items
@@ -27,6 +28,15 @@ class BaseLogger(commands.Cog):
         6 - Role Blacklist (The "Ignore Bots/Spammers" check-don't log unless caught by a higher whitelist).
         7 - DEFAULT: LOG IT (Since the bot is Opt-Out).
         """
+        # 0 - Dashboard Global Module Toggle
+        if hasattr(self.bot, "config_sync"):
+            normalized_cog = re.sub(r'(?<!^)(?=[A-Z])', '_', self.module_name).lower()
+            guild_cfg = self.bot.config_sync.get(guild.id)
+            if guild_cfg:
+                enabled_modules = guild_cfg.get("enabled_modules", {})
+                if enabled_modules.get(normalized_cog) is False:
+                    return False
+
         # Fetch all list items for this guild
         items = await get_all_list_items(guild.id)
         
@@ -94,7 +104,17 @@ class BaseLogger(commands.Cog):
         return True
 
     async def get_log_channel(self, guild: discord.Guild) -> Optional[discord.TextChannel]:
-        # Unpack
+        # 1. Prefer Dashboard Log Channel
+        if hasattr(self.bot, "config_sync"):
+            guild_cfg = self.bot.config_sync.get(guild.id)
+            if guild_cfg:
+                dashboard_log_id = guild_cfg.get("log_channel_id")
+                if dashboard_log_id:
+                    channel = guild.get_channel(int(dashboard_log_id))
+                    if channel:
+                        return channel
+
+        # 2. Fallback to Local DB
         res = await get_guild_settings(guild.id)
         if not res or not res[0]:
              return None

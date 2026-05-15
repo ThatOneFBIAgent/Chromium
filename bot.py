@@ -55,22 +55,57 @@ class Chromium(commands.AutoShardedBot):
             if settings:
                 guild_cfg = settings.get(guild_id)
                 if guild_cfg:
-                    cmd_name = interaction.command.name if interaction.command else ""
-                    
-                    # Module Check
-                    cog_name = getattr(interaction.command, "binding", None)
-                    if cog_name:
-                        cog_class_name = cog_name.__class__.__name__
-                        import re
-                        normalized_cog = re.sub(r'(?<!^)(?=[A-Z])', '_', cog_class_name).lower()
+                    cmd = interaction.command
+                    if not cmd:
+                        return True
                         
-                        modules = guild_cfg.get("enabled_modules", {})
-                        if modules.get(normalized_cog) is False:
-                            await interaction.response.send_message(
-                                f"❌ The `{normalized_cog}` module is disabled in this server.",
-                                ephemeral=True
-                            )
-                            return False
+                    # Module Resolution
+                    module_names = []
+                    if cmd.root_parent:
+                        module_names.append(cmd.root_parent.name.lower())
+                    
+                    # Binding/Cog check
+                    if hasattr(cmd, "binding"):
+                        cog_class = cmd.binding.__class__.__name__.lower()
+                        # Normalize CamelCase to snake_case
+                        import re
+                        normalized = re.sub(r'(?<!^)(?=[A-Z])', '_', cmd.binding.__class__.__name__).lower()
+                        # Strip common suffixes
+                        for suffix in ["commands", "cog", "commandsgroup", "logger"]:
+                            if normalized.endswith("_" + suffix):
+                                normalized = normalized[:-len(suffix)-1]
+                            elif normalized.endswith(suffix) and len(normalized) > len(suffix):
+                                normalized = normalized[:-len(suffix)]
+                        module_names.append(normalized)
+                    
+                    # Manual mapping for dashboard keys
+                    mapping = {
+                        "setup": "utility",
+                        "log_management": "logging",
+                        "list": "logging",
+                        "export": "logging"
+                    }
+                    
+                    final_modules = []
+                    for m in module_names:
+                        final_modules.append(m)
+                        if m in mapping:
+                            final_modules.append(mapping[m])
+
+                    modules_settings = guild_cfg.get("enabled_modules", {})
+                    blocked_module = None
+                    for m in final_modules:
+                        if modules_settings.get(m) is False:
+                            blocked_module = m
+                            break
+                            
+                    if blocked_module:
+                        log.info(f"Blocking command /{cmd.qualified_name} in guild {guild_id}: module '{blocked_module}' is disabled.")
+                        await interaction.response.send_message(
+                            f"❌ The `{blocked_module}` module is disabled in this server.",
+                            ephemeral=True
+                        )
+                        return False
         return True
 
     async def setup_hook(self):
