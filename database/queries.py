@@ -318,3 +318,29 @@ async def get_total_logs_count() -> int:
     except Exception as e:
         log.error("Failed to fetch total logs count", exc_info=e)
         return 0
+
+async def get_all_guild_settings_full():
+    """
+    Returns a list of dicts: [ {guild_id, log_channel_id, msg_id, mem_id, modules}, ... ]
+    """
+    if not db.connection:
+        return []
+    try:
+        cursor = await db.connection.execute(
+            "SELECT guild_id, log_channel_id, message_log_id, member_log_id, enabled_modules FROM guild_settings WHERE deleted_at IS NULL"
+        )
+        rows = await cursor.fetchall()
+        import json
+        return [
+            {
+                "guild_id": r[0],
+                "log_channel_id": r[1],
+                "msg_id": r[2],
+                "mem_id": r[3],
+                "modules": json.loads(r[4]) if r[4] else {}
+            }
+            for r in rows
+        ]
+    except Exception as e:
+        log.error("Failed to get all guild settings", exc_info=e)
+        return []

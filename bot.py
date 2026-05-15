@@ -139,8 +139,9 @@ class Chromium(commands.AutoShardedBot):
                     self.cached_total_logs = await get_total_logs_count()
                 except: pass
                 await asyncio.sleep(60)
-        
-        asyncio.create_task(update_logs())
+
+        self.loop.create_task(update_logs())
+        self.loop.create_task(self._push_initial_state())
         
         monitor = BotMonitor(
             reporter, 
@@ -190,6 +191,58 @@ class Chromium(commands.AutoShardedBot):
             log.error(f"Failed to load extensions: {failed_extensions}")
         else:
             log.discord("All extensions loaded successfully.")
+
+    async def _push_initial_state(self):
+        """Pushes local guild settings to the dashboard only if they are missing from it."""
+        await self.wait_until_ready()
+        # Wait for the first bulk pull to complete so we know what's already on the dashboard
+        await asyncio.sleep(15) 
+        
+        from database.queries import get_all_guild_settings_full
+        all_local_guilds = await get_all_guild_settings_full()
+        
+        log.info(f"StartupSync: Checking {len(all_local_guilds)} local guilds for dashboard alignment...")
+        
+        import re
+        push_count = 0
+        for g in all_local_guilds:
+            try:
+                guild_id_str = str(g["guild_id"])
+                
+                # If dashboard already has settings for this guild, DO NOT overwrite them.
+                # The dashboard is the source of truth for existing entries.
+                if self.config_sync.get(guild_id_str):
+                    continue
+
+                # Determine mode
+                is_complex = bool(g["msg_id"] or g["mem_id"])
+                
+                # Normalize modules
+                normalized_modules = {
+                    (re.sub(r'(?<!^)(?=[A-Z])', '_', k).lower()): v 
+                    for k, v in g["modules"].items()
+                }
+                
+                payload = {
+                    "log_channel_id": str(g["log_channel_id"]) if g["log_channel_id"] else None,
+                    "enabled_modules": normalized_modules,
+                    "log_mode": "complex" if is_complex else "simple"
+                }
+                
+                if is_complex:
+                    payload["complex_logs"] = {
+                        "server": str(g["log_channel_id"]),
+                        "message": str(g["msg_id"]),
+                        "member": str(g["mem_id"])
+                    }
+                
+                await self.config_sync.push_config(g["guild_id"], payload)
+                push_count += 1
+            except Exception as e:
+                log.error(f"StartupSync: Failed for guild {g['guild_id']}: {e}")
+        
+        if push_count > 0:
+            log.info(f"StartupSync: Successfully populated dashboard with {push_count} missing guild configs.")
 
     async def on_ready(self):
         # Only run once, even though each shard calls on_ready

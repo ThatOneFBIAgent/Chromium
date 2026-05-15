@@ -152,111 +152,93 @@ class BaseLogger(commands.Cog):
 
     async def log_event(self, guild: discord.Guild, embed: discord.Embed, suspicious: bool = False):
         try:
+            # 1. Fetch Local Settings for Fallback & Webhooks
             res = await get_guild_settings(guild.id)
-            if not res or not res[0]: # Need at least log_id
-                return
+            local_log_id = res[0] if res else None
+            local_msg_id = res[1] if res else None
+            local_mem_id = res[2] if res else None
+            local_log_wh = res[3] if res else None
+            local_msg_wh = res[4] if res else None
+            local_mem_wh = res[5] if res else None
+            local_enabled = res[6] if res else {}
 
-            log_id, msg_id, mem_id = res[0], res[1], res[2]
-            log_wh, msg_wh, mem_wh = res[3], res[4], res[5]
-            enabled_modules = res[6]
+            # 2. Check Dashboard Config
+            dash_cfg = {}
+            if hasattr(self.bot, "config_sync"):
+                dash_cfg = self.bot.config_sync.get(guild.id)
             
+            dash_log_id = dash_cfg.get("log_channel_id")
+            dash_complex = dash_cfg.get("complex_logs", {})
+            dash_enabled = dash_cfg.get("enabled_modules", {})
+            dash_mode = dash_cfg.get("log_mode", "simple")
+
             import re
             normalized_name = re.sub(r'(?<!^)(?=[A-Z])', '_', self.module_name).lower()
-            if not enabled_modules.get(normalized_name, False):
+            
+            # Module Enablement Check (Combined)
+            if dash_enabled.get(normalized_name) is False:
+                log.trace(f"[{self.module_name}] Blocked: Disabled in Dashboard.")
                 return
+            if not local_enabled.get(self.module_name, False):
+                # If it's disabled in local DB, we only log if it's explicitly enabled in dash
+                if not dash_enabled.get(normalized_name):
+                    log.trace(f"[{self.module_name}] Blocked: Disabled in Local DB.")
+                    return
 
-            target_id = log_id
-            target_wh = log_wh
-            fallback_id = None  # For complex setup, server-logs as fallback
+            # 3. Routing Logic (Prioritize Dashboard)
+            target_id = None
+            target_wh = None
             
-            log.trace(f"[{self.module_name}] Initial target_id={target_id}, target_wh={target_wh}")
+            if dash_mode == "complex" and dash_complex:
+                if self.module_name in ["MessageDelete", "MessageEdit"]:
+                    target_id = dash_complex.get("message")
+                elif self.module_name in [
+                    "MemberJoin", "MemberLeave", "MemberBan", "VoiceState", "NicknameUpdate", "MemberKick", "TimeoutUpdate"
+                ]:
+                    target_id = dash_complex.get("member")
+                else:
+                    target_id = dash_complex.get("system")
             
-            # Module Category Routing
+            if not target_id:
+                target_id = dash_log_id or local_log_id
+            
+            # Webhook Routing (Dashboard doesn't support webhooks yet, so use local)
+            target_wh = local_log_wh
             if self.module_name in ["MessageDelete", "MessageEdit"]:
-                if msg_id: 
-                    target_id = msg_id
-                    fallback_id = log_id  # server-logs is fallback
-                if msg_wh: target_wh = msg_wh
-            elif self.module_name in ["MemberJoin", "MemberLeave", "MemberBan", "VoiceState", "NicknameUpdate", "MemberKick", "TimeoutUpdate"]:
-                if mem_id: 
-                    target_id = mem_id
-                    fallback_id = log_id  # server-logs is fallback
-                if mem_wh: target_wh = mem_wh
+                if local_msg_wh: target_wh = local_msg_wh
+                if not target_id: target_id = local_msg_id
+            elif self.module_name in [
+                "MemberJoin", "MemberLeave", "MemberBan", "VoiceState", "NicknameUpdate", "MemberKick", "TimeoutUpdate"
+            ]:
+                if local_mem_wh: target_wh = local_mem_wh
+                if not target_id: target_id = local_mem_id
 
             if suspicious:
-                # Apply suspicious formatting
                 embed.color = discord.Color.dark_red()
                 embed.title = f"⚠️ Suspicious Activity: {embed.title}"
                 
             sent_successfully = False
-            webhook_failed = False
             
-            # Try Webhook First (with exponential backoff)
+            # Try Webhook
             if target_wh:
-                success, err = await send_with_backoff(
+                success, _ = await send_with_backoff(
                     lambda: discord.Webhook.from_url(
                         target_wh, session=self.bot.http_session, client=self.bot
                     ).send(embed=embed)
                 )
-                
                 if success:
                     sent_successfully = True
-                    log.trace(f"[{self.module_name}] Webhook send successful")
-                elif err and isinstance(err, discord.NotFound):
-                    # Webhook is dead
-                    log.warning(f"[{self.module_name}] Webhook deleted or invalid, falling back")
-                    webhook_failed = True
-                elif err:
-                    log.error(f"[{self.module_name}] Webhook send failed: {err}")
-                    webhook_failed = True
 
-            # Fallback when primary webhook fails
-            if not sent_successfully and webhook_failed:
-                # Step 1: Send error message via bot to the target channel
-                channel = guild.get_channel(target_id) if target_id else None
+            # Fallback to Channel
+            if not sent_successfully and target_id:
+                channel = guild.get_channel(int(target_id))
                 if channel:
-                    warning_embed = EmbedBuilder.warning(
-                        "⚠️ Webhook Unavailable",
-                        "The logging webhook was deleted or is invalid.\n"
-                        "Attempting to use server-logs webhook as fallback.\n\n"
-                        "**Fix:** Run `/setup` to reconfigure webhooks."
-                    )
-                    await send_with_backoff(lambda: channel.send(embed=warning_embed))
-                
-                # Step 2: Try server-logs webhook (log_wh) as fallback
-                if log_wh and log_wh != target_wh:
-                    # Append fallback note to footer
-                    if embed.footer and embed.footer.text:
-                        embed.set_footer(text=f"{embed.footer.text} | Fallback: via server-logs webhook")
-                    else:
-                        embed.set_footer(text="Fallback: via server-logs webhook")
-                    
-                    success, err = await send_with_backoff(
-                        lambda: discord.Webhook.from_url(
-                            log_wh, session=self.bot.http_session, client=self.bot
-                        ).send(embed=embed)
-                    )
-                    
-                    if success:
-                        sent_successfully = True
-                        log.trace(f"[{self.module_name}] Fallback to server-logs webhook successful")
-                    else:
-                        log.warning(f"[{self.module_name}] Server-logs webhook also failed: {err}")
-                
-                # Step 3: Last resort - send via bot to server-logs channel
-                if not sent_successfully and fallback_id and fallback_id != target_id:
-                    fallback_channel = guild.get_channel(fallback_id)
-                    if fallback_channel:
-                        if embed.footer and embed.footer.text and "Fallback" not in embed.footer.text:
-                            embed.set_footer(text=f"{embed.footer.text} | Fallback: direct send (webhooks unavailable)")
-                        elif not embed.footer or not embed.footer.text:
-                            embed.set_footer(text="Fallback: direct send (webhooks unavailable)")
-                        
-                        success, err = await send_with_backoff(lambda: fallback_channel.send(embed=embed))
-                        if success:
-                            sent_successfully = True
-                        else:
-                            log.error(f"[{self.module_name}] All fallback methods failed: {err}")
+                    await send_with_backoff(lambda: channel.send(embed=embed))
+                    sent_successfully = True
+            
+            if not sent_successfully:
+                log.warning(f"[{self.module_name}] Failed to send log to guild {guild.id}")
+                return
 
             # DB Persist (only if we successfully sent)
             if sent_successfully:

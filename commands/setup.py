@@ -1,4 +1,5 @@
 import discord
+import re
 from discord import app_commands
 from discord.ext import commands
 from database.queries import upsert_guild_settings
@@ -111,6 +112,19 @@ class Setup(commands.Cog):
             member_webhook_url=webhook.url,
             enabled_modules=default_modules
         )
+
+        # Push to dashboard
+        if hasattr(self.bot, "config_sync"):
+            normalized_modules = {
+                # Setup gives CamelCase, dashboard wants snake_case
+                (re.sub(r'(?<!^)(?=[A-Z])', '_', k).lower()): v 
+                for k, v in default_modules.items()
+            }
+            await self.bot.config_sync.push_config(interaction.guild_id, {
+                "log_channel_id": str(interaction.channel_id),
+                "enabled_modules": normalized_modules,
+                "log_mode": "simple"
+            })
         
         embed = EmbedBuilder.success(
             title="Setup Complete",
@@ -240,6 +254,23 @@ class Setup(commands.Cog):
                 member_webhook_url=member_wh.url if member_wh else None,
                 enabled_modules=default_modules
             )
+
+            # Push to dashboard
+            if hasattr(self.bot, "config_sync"):
+                normalized_modules = {
+                    (re.sub(r'(?<!^)(?=[A-Z])', '_', k).lower()): v 
+                    for k, v in default_modules.items()
+                }
+                await self.bot.config_sync.push_config(guild.id, {
+                    "log_channel_id": str(server_logs.id),
+                    "complex_logs": {
+                        "server": str(server_logs.id),
+                        "message": str(message_logs.id),
+                        "member": str(member_logs.id)
+                    },
+                    "enabled_modules": normalized_modules,
+                    "log_mode": "complex"
+                })
             
             embed = EmbedBuilder.success(
                 title="Complex Setup Complete",
