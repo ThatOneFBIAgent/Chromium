@@ -264,7 +264,7 @@ class Setup(commands.Cog):
                 await self.bot.config_sync.push_config(guild.id, {
                     "log_channel_id": str(server_logs.id),
                     "complex_logs": {
-                        "server": str(server_logs.id),
+                        "system": str(server_logs.id),
                         "message": str(message_logs.id),
                         "member": str(member_logs.id)
                     },

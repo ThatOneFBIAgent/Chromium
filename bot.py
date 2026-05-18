@@ -232,7 +232,7 @@ class Chromium(commands.AutoShardedBot):
                 
                 if is_complex:
                     payload["complex_logs"] = {
-                        "server": str(g["log_channel_id"]),
+                        "system": str(g["log_channel_id"]),
                         "message": str(g["msg_id"]),
                         "member": str(g["mem_id"])
                     }
