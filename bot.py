@@ -155,6 +155,7 @@ class Chromium(commands.AutoShardedBot):
             api_url=os.getenv("DASHBOARD_URL"),
             bot_id="chromium",
             bot=self,
+            on_maintenance_cleared=self._push_initial_state,
         )
         asyncio.create_task(self.config_sync.run_forever())
 
@@ -204,7 +205,7 @@ class Chromium(commands.AutoShardedBot):
         log.info(f"StartupSync: Checking {len(all_local_guilds)} local guilds for dashboard alignment...")
         
         import re
-        push_count = 0
+        guilds_to_push = {}
         for g in all_local_guilds:
             try:
                 guild_id_str = str(g["guild_id"])
@@ -236,13 +237,16 @@ class Chromium(commands.AutoShardedBot):
                         "member": str(g["mem_id"])
                     }
                 
-                await self.config_sync.push_config(g["guild_id"], payload)
-                push_count += 1
+                guilds_to_push[guild_id_str] = payload
             except Exception as e:
-                log.error(f"StartupSync: Failed for guild {g['guild_id']}: {e}")
+                log.error(f"StartupSync: Failed preparing guild {g['guild_id']}: {e}")
         
-        if push_count > 0:
-            log.info(f"StartupSync: Successfully populated dashboard with {push_count} missing guild configs.")
+        if guilds_to_push:
+            success = await self.config_sync.bulk_sync(guilds_to_push)
+            if success:
+                log.info(f"StartupSync: Successfully bulk-seeded dashboard with {len(guilds_to_push)} missing guild configs.")
+            else:
+                log.error("StartupSync: Bulk sync failed.")
 
     async def on_ready(self):
         # Only run once, even though each shard calls on_ready

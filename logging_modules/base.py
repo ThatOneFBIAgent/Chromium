@@ -176,13 +176,22 @@ class BaseLogger(commands.Cog):
             normalized_name = re.sub(r'(?<!^)(?=[A-Z])', '_', self.module_name).lower()
             
             # Module Enablement Check (Combined)
-            if dash_enabled.get(normalized_name) is False:
-                log.trace(f"[{self.module_name}] Blocked: Disabled in Dashboard.")
-                return
-            if not local_enabled.get(self.module_name, False):
-                # If it's disabled in local DB, we only log if it's explicitly enabled in dash
-                if not dash_enabled.get(normalized_name):
-                    log.trace(f"[{self.module_name}] Blocked: Disabled in Local DB.")
+            # If the dashboard has config for this guild, it is the authority.
+            # If the dashboard has NO config (empty dict), fall back to local DB only.
+            if dash_cfg:
+                # Dashboard has config — use it as authority
+                if dash_enabled.get(normalized_name) is False:
+                    log.trace(f"[{self.module_name}] Blocked: Disabled in Dashboard.")
+                    return
+                # If dashboard doesn't mention this module, check local as fallback
+                if normalized_name not in dash_enabled:
+                    if not local_enabled.get(self.module_name, False):
+                        log.trace(f"[{self.module_name}] Blocked: Not in Dashboard, disabled in Local DB.")
+                        return
+            else:
+                # No dashboard config — local DB is sole authority
+                if not local_enabled.get(self.module_name, False):
+                    log.trace(f"[{self.module_name}] Blocked: Disabled in Local DB (no dashboard config).")
                     return
 
             # 3. Routing Logic (Prioritize Dashboard)
